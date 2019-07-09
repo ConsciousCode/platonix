@@ -1,0 +1,15 @@
+BADFD		// A fd was referenced which isn't open
+BADTAG		// Referenced a tag which isn't active
+BADCMD		// Invalid command
+BADNAME		// Invalid filename
+BADMODE		// Invalid mode value
+INVALID		// Invalid operation for the file type
+ACCESS		// Don't have permission
+NOEXIST		// File doesn't exist
+LOOP		// Link loop
+MEMORY		// Out of memory
+FDLIMIT		// No more file descriptors can be opened
+NORES		// Out of resources
+IO			// Some I/O error
+NOTFILE		// The fd is open as a path and not a file
+NOTPATH		// The fd is opened as a file and not a path

@@ -1,0 +1,210 @@
+* Host
+  - Arch
+* Operation
+  - System
+  - Emu
+  - Lib
+
+Host
+* Buses and IO
+* Memory management
+* Scheduling
+System
+* Path resolution
+* Device management
+* Linking
+Emulation
+* Execution
+* Verification
+Library
+* Common functionality
+
+What is a filesystem if not a giant registry?
+There's some universal patterns that are easy to notice:
+* Directories behave exactly like Lua tables, which subset into maps and arrays. Some tables have indices as well as keys
+* One exception is something not typically handled by a file system - packet-based messaging
+** Useful for IPC
+** Packet messaging is a strict superset of ordinary file functions
+
+/
+	exec/ - all executables (replaces $PATH)
+	config/ - equivalent to etc, all systemwide configuration
+		mount/
+	dev/ - device files
+		null
+		zero
+		full
+		hid/
+			pointer/ - mouse data {index}/
+					x
+					y
+			keyboard/ - keyboard data {index}/
+					scancode
+		random
+		urandom
+		hwrng
+		block/
+		char/
+		hard/
+		sys - read = kernel version, write
+		user - user of the reading process
+		ms
+		time
+
+		null
+		zero
+		full
+		hid/
+			pointer/ - mouse data {index}/
+					x
+					y
+			keyboard/ - keyboard data {index}/
+					scancode
+		random
+		urandom
+		hwrng
+		block/
+		char/
+		hard/
+		sys - read = kernel version, write
+		user - user of the reading process
+		ms
+		time
+	sys/
+		log - kernel log device
+		name
+		version
+		ctl (reboot, halt, nobroken)
+		cmdline
+		bus/
+		cpuinfo
+		memory
+		idletime
+		hypervisor/log - kernel log device
+		name
+		version
+		ctl (reboot, halt, nobroken)
+		cmdline
+		bus/
+		cpuinfo
+		memory
+		idletime
+		hypervisor/
+		node/ - lists nodes within the infernix cluster { {uuid}}/ (mount -a . /)
+			exec/
+			config/
+			dev/
+			sys/
+			proc/
+			var/
+			man/
+			tmp/
+			home/
+			boot/
+			lib/
+			media/
+			app/
+	proc/ - process descriptions
+		self
+		group/ {groupname}/ {pid} -> ../../ {pid}
+        kill
+		all/ {pid}/
+				kill - kill the process
+				env/
+					cwd
+				std/
+					in
+					out
+					err
+				user
+				group
+        parent
+				fd/
+				memory
+				stack/
+				cmdline
+				exe
+				ns
+				status
+		self
+		group/ {groupname}/ {pid} -> ../../ {pid}
+		pid/ {pid}/
+				/* control */
+				kill - kill the process
+				killgrp - kill all processes in the same group (except the calling process, if applicable)
+				restricted
+				/* data */
+				env/
+					cwd
+				std/
+					in
+					out
+					err
+				fd/
+				stack/
+				fdinfo/
+
+				user
+				group
+				memory
+				cmdline
+				exe
+				root
+				status
+				task
+				start
+				time
+		new/ - files written to this directory are records for creating new processes, removed when the process is added to proc/
+	var/ - variable-length files like logs
+		log/ - Logs
+	man/
+	tmp/
+	usr?/
+	home/ - user data
+	boot/ - boot data
+	lib/ - libraries
+	media/ - mounted media devices
+	app/ - descriptions of applications (similar to GNOME .desktop files) {name}/
+			name
+			generic-name
+			comment
+			categories
+			icon
+			type
+			version
+			exec
+			path
+			terminal
+			env
+			args
+
+	pkg/ - package data {name}/ {version}/
+	net/ - used for mounting remote network devices
+		dns
+		tcp
+		udp
+		arp
+		ndb
+	src/ - source files
+		c/
+		cpp/
+		java/
+		limbo/
+		python/
+		js/
+		vbs/
+		...
+	obj/ - object files ?
+
+1. Use Linux conception of users and groups, seems to be powerful, extensible, and still useful
+2. Files should have permissions rwx for user:group:other
+3. POSIX programs: c99 lex yacc ar make nm strip bg ex fc fg jobs more uucp uustat uux
+4. POSIX required files: / /dev /dev/console /dev/null /dev/tty /tmp
+
+admin alias ar asa at awk basename batch bc bg c99 cal cat cd cflow chgrp chmod chown cksum cmp comm command compress cp crontab csplit ctags cut cxref date dd delta df diff dirname du echo ed env ex expand expr false fc fg file find fold fort77 fuser gencat get getconf getopts grep hash head iconv id ipcrm ipcs jobs join kill lex link ln locale localedef logger logname lp ls m4 mailx make man mesg mkdir mkfifo more mv newgrp nice nl nm nohup od paste patch pathchk pax pr printf prs ps pwd qalter qdel qhold qmove qmsg qrerun qrls qselect qsig qstat qsub read renice rm rmdel rmdir sact sccs sed sh sleep sort split strings strip stty tabs tail talk tee test time touch tput tr true tsort tty type ulimit umask unalias uname uncompress unexpand unget uniq unlink uucp uudecode uuencode uustat uux val vi wait wc what who write xargs yacc zcat
+
+Process:
+* Subprocesses
+* User id
+* Namespace
+  - 
