@@ -1,0 +1,21 @@
+dup(fid_t fd) => fid_t fd
+dup2(fid_t fd, fid_t nf) => void
+open(fid_t fd, mode_t mode) => void
+close(fid_t fd) => void
+
+read(fid_t fd, chunk_t size) => bytes data
+write(fid_t fd, bytes data) => off_t size
+seek(fid_t fd, off_t off) => void
+tell(fid_t fd) => off_t off
+
+move(fid_t src, fid_t dst) => void
+remove(fid_t fd) => void
+copy(fid_t src, fid_t dst) => void
+link(fid_t src, fid_t dst) => void
+resize(fid_t fd, off_t size) => off_t size
+
+whois(uid_t uid) => string name
+whoami() => uid_t uid, string name
+
+mount(fid_t loc) => void
+umount(fid_t loc) => void

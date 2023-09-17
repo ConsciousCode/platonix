@@ -1,0 +1,139 @@
+name: JSON
+type: text:config/json
+standards:
+  mime: text/json
+symbols:
+ - string
+ - number
+ - array 
+ - object
+ - value
+primary: value
+
+---
+
++ - * ** / // % %% << >> >>> & | ^ ~ and or not !! < <= > >= != ==
+
+arith + 5 bits
+ add
+ sub
+ neg
+ mul
+ pow
+ div
+ mod
+ int
+ lsl
+ lsr
+ asr
+ and
+ ior
+ xor
+ inv
+ cmp
+ sgn
+
+composite types take a generator
+
+Required features
+* Mixing text and binary (regex welcome)
+* Compact representation (self-describing format)
+* Simple rules to make complex structures
+* Data validation (assert)
+* Data representation vs interpretation
+
+Interpretation types:
+* bool
+* char
+* int
+* real
+* string
+* list
+* map
+* struct? map with fixed keys
+
+union eschar {
+	struct : char {
+		
+		"\\";
+		yield union {
+			'b': '\b'
+			'f': '\f'
+			'n': '\n'
+			'r': '\r'
+			't': '\t'
+			'"': '"'
+			'\\': '\\'
+			
+			/u([\da-f]{4})/i : char(int($[1], 16))
+			
+			else: error("Unknown escape")
+		}
+	}
+	char;
+}
+
+struct jstring : string {
+	yield /"(${escar})*"/[1];
+}
+
+struct jnumber : int|float {
+	/([-+]?\d+)(?:\.(\d+))?(?:e([-+]?\d+))?/ m;
+	
+	if(m[2] or m[3]) {
+		yield float(int(m[1]) + "." + int(m[2]))*10**int(m[3]);
+	}
+	else {
+		yield int(m[1]);
+	}
+}
+
+struct array : value[] {
+	yield from /\[\s*(${value,,\s*})\s*\]/[1];
+}
+
+struct keyval : pair {
+	jstring k;
+	/\s*:\s*/;
+	value v;
+	
+	yield k:v;
+}
+
+struct object : map {
+	yield from /\{\s*(${keyval,,\s*)})\s*\}/[1]
+}
+
+union value {
+	jnumber;
+	jstring;
+	array;
+	object;
+}
+
+schema value;
+
+Types:
+ * struct - meta-type, defines data parsing method
+ * var - local variable, not part of the data
+ * type[] - list of type
+   - sub-typing: generator of elements in the list
+ * map - (string|int):type mapping
+ * string
+   - sub-typing: pattern of allowable characters
+ * if/else - control flow, operand included as-is if true
+ * do/until/while - looping, a block is transparent to yields
+ * match - check a value against multiple values
+
+Keywords:
+ * yield - provide a value passed to the innermost generator block
+ * break - prematurely exit a loop
+ * continue
+ * else - used for match for else case
+ * then - used after an "if" consumes the token it matched before processing the operand
+   - equivalent to {char; <operand>}
+ 
+Literals:
+ * "...", '...' string
+ * /.../??? regex
+

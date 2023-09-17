@@ -46,15 +46,8 @@ class Mount {
 
 		move(fid_t src, fid_t dst) => void
 		remove(fid_t fd) => void
-		list(fid_t fd) => void
 		copy(fid_t src, fid_t dst) => void
 		link(fid_t src, fid_t dst) => void
-		stat(fid_t fd) => Stat stat
-		wstat(fid_t fd, Stat stat) => void
-		lsxattr(fid_t fd) => bytes data
-		getxattr(fid_t fd, String name) => bytes value
-		setxattr(fid_t fd, String name, bytes value) => void
-		rmxattr(fid_t fd, String name) => void
 		resize(fid_t fd, off_t size) => off_t size
 };
 
@@ -97,10 +90,21 @@ class UnionMount : public Mount {
 
 std::vector<u8> strls_to_bytes(const std::vector<std::string>& ls);
 
+class VNode {
+	public:
+		virtual void move(File* dst) = 0;
+		virtual void remove() = 0;
+
+		virtual void copy(File* dst) = 0;
+		virtual void link(File* dst) = 0;
+		virtual off_t resize(off_t size) = 0;
+
+		virtual File* openat(std::string path) = 0;
+}
+
 class File {
 	public:
-		Mount* mnt;
-		fs::path path;
+		VNode* node;
 
 		File(fs::path p);
 
@@ -111,44 +115,17 @@ class File {
 		virtual off_t write(u8* data, chunk_t size);
 		virtual void seek(off_t off);
 		virtual off_t tell();
-		virtual void insert(u8* data, chunk_t size);
-		virtual void erase(off_t size);
-
-		virtual std::vector<std::string> lsxattr();
-		virtual std::vector<u8> getxattr(const std::string& name);
-		virtual void setxattr(const std::string& name, const std::vector<u8>& data);
-		virtual void rmxattr(const std::string& name);
-
-		virtual void move(File* dst);
-		virtual void remove();
-		
-		virtual std::vector<std::string> list();
-
-		virtual void copy(File* dst);
-		virtual void link(File* dst);
-		virtual Stat stat();
-		virtual void wstat(Stat stat);
-		virtual off_t resize(off_t size);
 };
 
 class Path : public File {
 	public:
 		virtual void open(mode_t mode) override;
 
-		virtual std::vector<std::string> lsxattr() override;
-		virtual std::vector<u8> getxattr(const std::string& name) override;
-		virtual void setxattr(const std::string& name, const std::vector<u8>& data) override;
-		virtual void rmxattr(const std::string& name) override;
-
 		virtual void move(File* dst) override;
 		virtual void remove() override;
-		
-		virtual std::vector<std::string> list() override;
 
 		virtual void copy(File* dst) override;
 		virtual void link(File* dst) override;
-		virtual Stat stat() override;
-		virtual void wstat(Stat stat) override;
 		virtual off_t resize(off_t size) override;
 };
 
@@ -164,13 +141,6 @@ class NativeFile : public File {
 		virtual off_t write(u8* data, chunk_t size) override;
 		virtual void seek(off_t off) override;
 		virtual off_t tell() override;
-		virtual void insert(u8* data, chunk_t size) override;
-		virtual void erase(off_t size) override;
-
-		virtual std::vector<std::string> lsxattr() override;
-		virtual std::vector<u8> getxattr(const std::string& name) override;
-		virtual void setxattr(const std::string& name, const std::vector<u8>& data) override;
-		virtual void rmxattr(const std::string& name) override;
 };
 
 class VFS : public Mount {

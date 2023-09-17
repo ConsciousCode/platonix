@@ -1,0 +1,37 @@
+alc	chemical/x-alchemy	Alchemy Format	
+csf	chemical/x-cache-csf	CAChe MolStruct CSF	
+cbin, cascii, ctab	chemical/x-cactvs-binary	CACTVS format	
+cdx	chemical/x-cdx	ChemDraw eXchange file	
+cer	chemical/x-cerius	MSI Cerius II format	
+c3d	chemical/x-chem3d	Chem3D Format	
+chm	chemical/x-chemdraw	ChemDraw file	
+cif	chemical/x-cif	Crystallographic Information File, Crystallographic Information Framework	Promulgated by the International Union of Crystallography
+cmdf	chemical/x-cmdf	CrystalMaker Data format	
+cml	chemical/x-cml	Chemical Markup Language	XML based Chemical Markup Language.
+cpa	chemical/x-compass	Compass program of the Takahashi	
+bsd	chemical/x-crossfire	Crossfire file	
+csm, csml	chemical/x-csml	Chemical Style Markup Language	
+ctx	chemical/x-ctx	Gasteiger group CTX file format	
+cxf, cef	chemical/x-cxf	Chemical eXchange Format	
+emb, embl	chemical/x-embl-dl-nucleotide	EMBL Nucleotide Format	
+spc	chemical/x-galactic-spc	SPC format for spectral and chromatographic data	
+inp, gam, gamin	chemical/x-gamess-input	GAMESS Input format	
+fch, fchk	chemical/x-gaussian-checkpoint	Gaussian Checkpoint Format	
+cub	chemical/x-gaussian-cube	Gaussian Cube (Wavefunction) Format	
+gau, gjc, gjf, com	chemical/x-gaussian-input	Gaussian Input Format	
+gcg	chemical/x-gcg8-sequence	Protein Sequence Format	
+gen	chemical/x-genbank	ToGenBank Format	
+istr,ist	chemical/x-isostar	IsoStar Library of Intermolecular Interactions	
+jdx, dx	chemical/x-jcamp-dx	JCAMP Spectroscopic Data Exchange Format	
+kin	chemical/x-kinemage	Kinetic (Protein Structure) Images; Kinemage	
+mcm	chemical/x-macmolecule	MacMolecule File Format	
+mmd, mmod	chemical/x-macromodel-input	MacroModel Molecular Mechanics	
+mol	chemical/x-mdl-molfile	MDL Molfile	
+smiles, smi	chemical/x-daylight-smiles	Simplified molecular input line entry specification	A line notation for molecules.
+sdf	chemical/x-mdl-sdfile	Structure-Data File	
+el	chemical/x-sketchel	SketchEl Molecule	
+ds	chemical/x-datasheet	SketchEl XML DataSheet	
+inchi	chemical/x-inchi	The IUPAC International Chemical Identifier	
+jsd, jsdraw	chemical/x-jsdraw	JSDraw native file format	
+helm, ihelm	chemical/x-helm	Pistoia Alliance HELM string	A line notation for biological molecules
+xhelm	chemical/x-xhelm	Pistoia Alliance XHELM XML file	XML based HELM including monomer definitions

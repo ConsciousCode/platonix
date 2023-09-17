@@ -1,0 +1,336 @@
+Features provided by pnixfs and usage
+
+mount pnixfs /pnix
+> ls /pnix/ empty
+
+pnix acts like an independent server/computer or VM
+
+Syscalls:
+
+Filesystem:
+ * read(fd, size) / read_buf
+   - listxattr #xattr
+   - getxattr #xattr/name
+   - readdir
+   - readdirplus
+   - getattr #stat
+   - readlink
+ * write(fd, data) / write_buf
+   - setxattr #xattr/name
+   - setattr #stat/*
+ * open(parent, name, flags)
+   - opendir
+   - access #access
+   - create
+   - ioctl #io
+   - fcntl ##
+   - mkdir
+   - symlink
+   - link
+   - fallocate
+   - create
+   * Flags:
+     - READ
+     - WRITE
+     - !READ & !WRITE = PATH
+     - APPEND / TRUNC = 0 / 1
+     - CREATE - create if it doesn't exist
+     - EXCLUSIVE - fail if the file does exist
+     - ASYNC
+	 - TMPFILE - 
+	 - CLOSE - close after the first read/write operation
+	 - Type (FS-dependent)
+	   * REG
+	   * DEV
+	   * DIR
+	   * LINK
+	   * SYMLINK
+	   * FIFO
+	   * SOCKET
+	 - Hint
+	   * NORMAL
+	   * SEQUENTIAL
+	   * RANDOM
+	   * NOREUSE
+	   * 
+ * sync(fd)
+   - fsyncdir
+ * release(fd)
+   - releasedir
+ * rename(fd, parent, name)
+ * remove(fd)
+   - removexattr #xattr/name
+ * optimization: copy_file_range / sendfile
+ * copy(fd from, fd to, off_from, off_to, length)
+   - cp = copy(PATH(from), PATH(to), 0, 0, -1)
+
+read write open flush release move remove copy
+ * read - read up to N bytes from the file
+ * write - write N bytes to the file, returning how many were actually written
+ * open - open a file in a given mode
+ * sync - program requires the actual device is synchronized, flush any buffers that may exist
+ * release - file descriptor reference count is 0, release all resources. This is called exactly once per object
+ * rename - reparent an inode
+ * remove - remove a reference to an inode
+
+Process:
+ * mmap
+ * wait
+ * pause
+ * clone
+ * sleep
+ * exit
+ * mount
+ * epoll
+ * exec
+
+contype handling implementation:
+ * load as shared object library
+ * read write open sync release rename remove
+ 
+
+Standard FD subfiles:
+ * ##mode
+ * ##offset
+ * ##dup
+ * ##lock
+
+exec steps:
+ * #!path = use path to execute
+ 
+Terminology:
+ * knowsys
+ * subfile - subsets of data in a file
+ * metafile - metadata of a file exposed as a file
+ * livefile - file which can't be stored, eg file descriptors and open sockets
+ * endpoint - generic form of file?
+
+inode_operations:
+	int (*create) (struct inode *,struct dentry *,umode_t, bool);
+	struct dentry * (*lookup) (struct inode *,struct dentry *, unsigned int);
+	int (*link) (struct dentry *,struct inode *,struct dentry *);
+	int (*unlink) (struct inode *,struct dentry *);
+	int (*symlink) (struct inode *,struct dentry *,const char *);
+	int (*mkdir) (struct inode *,struct dentry *,umode_t);
+	int (*rmdir) (struct inode *,struct dentry *);
+	int (*mknod) (struct inode *,struct dentry *,umode_t,dev_t);
+	int (*rename) (struct inode *, struct dentry *,
+					struct inode *, struct dentry *, unsigned int);
+	int (*readlink) (struct dentry *, char __user *,int);
+	const char *(*get_link) (struct dentry *, struct inode *, struct delayed_call *);
+	void (*truncate) (struct inode *);
+	int (*permission) (struct inode *, int, unsigned int);
+	int (*get_acl)(struct inode *, int);
+	int (*setattr) (struct dentry *, struct iattr *);
+	int (*getattr) (const struct path *, struct kstat *, u32, unsigned int);
+	ssize_t (*listxattr) (struct dentry *, char *, size_t);
+	int (*fiemap)(struct inode *, struct fiemap_extent_info *, u64 start, u64 len);
+	void (*update_time)(struct inode *, struct timespec *, int);
+	int (*atomic_open)(struct inode *, struct dentry *,
+							struct file *, unsigned open_flag,
+							umode_t create_mode);
+	int (*tmpfile) (struct inode *, struct dentry *, umode_t);
+
+address_space_operations:
+	int(* 	writepage )(struct page *page, struct writeback_control *wbc)
+	int(* 	readpage )(struct file *, struct page *)
+	int(* 	writepages )(struct address_space *, struct writeback_control *)
+	int(* 	set_page_dirty )(struct page *page)
+	int(* 	readpages )(struct file *filp, struct address_space *mapping, struct list_head *pages, unsigned nr_pages)
+	int(* 	write_begin )(struct file *, struct address_space *mapping, loff_t pos, unsigned len, unsigned flags, struct page **pagep, void **fsdata)
+	int(* 	write_end )(struct file *, struct address_space *mapping, loff_t pos, unsigned len, unsigned copied, struct page *page, void *fsdata)
+	sector_t(* 	bmap )(struct address_space *, sector_t)
+	void(* 	invalidatepage )(struct page *, unsigned long)
+	int(* 	releasepage )(struct page *, gfp_t)
+	void(* 	freepage )(struct page *)
+	ssize_t(* 	direct_IO )(int, struct kiocb *, const struct iovec *iov, loff_t offset, unsigned long nr_segs)
+	int(* 	get_xip_mem )(struct address_space *, pgoff_t, int, void **, unsigned long *)
+	int(* 	migratepage )(struct address_space *, struct page *, struct page *, enum migrate_mode)
+	int(* 	launder_page )(struct page *)
+	int(* 	is_partially_uptodate )(struct page *, read_descriptor_t *, unsigned long)
+	int(* 	error_remove_page )(struct address_space *, struct page *)
+	int(* 	swap_activate )(struct swap_info_struct *sis, struct file *file, sector_t *span)
+	void(* 	swap_deactivate )(struct file *file)
+
+file_system_type:
+	const char * 	name
+	int 	fs_flags
+	struct dentry *(* 	mount )(struct file_system_type *, int, const char *, void *)
+	void(* 	kill_sb )(struct super_block *)
+	struct module * 	owner
+	struct file_system_type * 	next
+	struct hlist_head 	fs_supers
+	struct lock_class_key 	s_lock_key
+	struct lock_class_key 	s_umount_key
+	struct lock_class_key 	s_vfs_rename_key
+	struct lock_class_key 	s_writers_key [SB_FREEZE_LEVELS]
+	struct lock_class_key 	i_lock_key
+	struct lock_class_key 	i_mutex_key
+	struct lock_class_key 	i_mutex_dir_key
+
+fs_context_operations:
+	void (*free)(struct fs_context *fc);
+	int (*dup)(struct fs_context *fc, struct fs_context *src_fc);
+	int (*parse_param)(struct fs_context *fc, struct fs_parameter *param);
+	int (*parse_monolithic)(struct fs_context *fc, void *data);
+	int (*get_tree)(struct fs_context *fc);
+	int (*reconfigure)(struct fs_context *fc);
+
+dentry_operations:
+	int (*d_revalidate)(struct dentry *, unsigned int);
+	int (*d_weak_revalidate)(struct dentry *, unsigned int);
+	int (*d_hash)(const struct dentry *, struct qstr *);
+	int (*d_compare)(const struct dentry *,
+					unsigned int, const char *, const struct qstr *);
+	int (*d_delete)(struct dentry *);
+	int (*d_init)(struct dentry *);
+	void (*d_release)(struct dentry *);
+	void (*d_iput)(struct dentry *, struct inode *);
+	char *(*d_dname)((struct dentry *dentry, char *buffer, int buflen);
+	struct vfsmount *(*d_automount)(struct path *path);
+	int (*d_manage)(const struct path *, bool);
+	struct dentry *(*d_real)(struct dentry *, const struct inode *);
+
+xattr_handler:
+	bool (*list)(struct dentry *dentry);
+	int (*get)(const struct xattr_handler *handler, struct dentry *dentry,
+			struct inode *inode, const char *name, void *buffer,
+			size_t size);
+	int (*set)(const struct xattr_handler *handler, struct dentry *dentry,
+			struct inode *inode, const char *name, const void *buffer,
+			size_t size, int flags);
+
+file_lock_operations:
+	void (*fl_copy_lock)(struct file_lock *, struct file_lock *);
+	void (*fl_release_private)(struct file_lock *);
+
+lock_manager_operations:
+	void (*lm_notify)(struct file_lock *);  /* unblock callback */
+	int (*lm_grant)(struct file_lock *, struct file_lock *, int);
+	void (*lm_break)(struct file_lock *); /* break_lease callback */
+	int (*lm_change)(struct file_lock **, int);
+	bool (*lm_breaker_owns_lease)(struct file_lock *);
+
+buffer_head (interrupt):
+	void (*b_end_io)(struct buffer_head *bh, int uptodate);
+
+block_device_operations:
+	int (*open) (struct block_device *, fmode_t);
+	int (*release) (struct gendisk *, fmode_t);
+	int (*ioctl) (struct block_device *, fmode_t, unsigned, unsigned long);
+	int (*compat_ioctl) (struct block_device *, fmode_t, unsigned, unsigned long);
+	int (*direct_access) (struct block_device *, sector_t, void **,
+							unsigned long *);
+	int (*media_changed) (struct gendisk *);
+	void (*unlock_native_capacity) (struct gendisk *);
+	int (*revalidate_disk) (struct gendisk *);
+	int (*getgeo)(struct block_device *, struct hd_geometry *);
+	void (*swap_slot_free_notify) (struct block_device *, unsigned long);
+
+file_operations:
+	loff_t (*llseek) (struct file *, loff_t, int);
+	ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);
+	ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
+	ssize_t (*read_iter) (struct kiocb *, struct iov_iter *);
+	ssize_t (*write_iter) (struct kiocb *, struct iov_iter *);
+	int (*iterate) (struct file *, struct dir_context *);
+	int (*iterate_shared) (struct file *, struct dir_context *);
+	__poll_t (*poll) (struct file *, struct poll_table_struct *);
+	long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);
+	long (*compat_ioctl) (struct file *, unsigned int, unsigned long);
+	int (*mmap) (struct file *, struct vm_area_struct *);
+	int (*open) (struct inode *, struct file *);
+	int (*flush) (struct file *);
+	int (*release) (struct inode *, struct file *);
+	int (*fsync) (struct file *, loff_t start, loff_t end, int datasync);
+	int (*fasync) (int, struct file *, int);
+	int (*lock) (struct file *, int, struct file_lock *);
+	ssize_t (*readv) (struct file *, const struct iovec *, unsigned long,
+					loff_t *);
+	ssize_t (*writev) (struct file *, const struct iovec *, unsigned long,
+					loff_t *);
+	ssize_t (*sendfile) (struct file *, loff_t *, size_t, read_actor_t,
+					void __user *);
+	ssize_t (*sendpage) (struct file *, struct page *, int, size_t,
+					loff_t *, int);
+	unsigned long (*get_unmapped_area)(struct file *, unsigned long,
+					unsigned long, unsigned long, unsigned long);
+	int (*check_flags)(int);
+	int (*flock) (struct file *, int, struct file_lock *);
+	ssize_t (*splice_write)(struct pipe_inode_info *, struct file *, loff_t *,
+					size_t, unsigned int);
+	ssize_t (*splice_read)(struct file *, loff_t *, struct pipe_inode_info *,
+					size_t, unsigned int);
+	int (*setlease)(struct file *, long, struct file_lock **, void **);
+	long (*fallocate)(struct file *, int, loff_t, loff_t);
+
+dquot_operations:
+	int (*write_dquot) (struct dquot *);
+	int (*acquire_dquot) (struct dquot *);
+	int (*release_dquot) (struct dquot *);
+	int (*mark_dirty) (struct dquot *);
+	int (*write_info) (struct super_block *, int);
+
+vm_operations_struct:
+	void (*open)(struct vm_area_struct*);
+	void (*close)(struct vm_area_struct*);
+	vm_fault_t (*fault)(struct vm_area_struct*, struct vm_fault *);
+	vm_fault_t (*page_mkwrite)(struct vm_area_struct *, struct vm_fault *);
+	vm_fault_t (*pfn_mkwrite)(struct vm_area_struct *, struct vm_fault *);
+	int (*access)(struct vm_area_struct *, unsigned long, void*, int, int);
+
+super_operations:
+	struct inode *(*alloc_inode)(struct super_block *sb);
+	void (*destroy_inode)(struct inode *);
+
+	void (*dirty_inode) (struct inode *, int flags);
+	int (*write_inode) (struct inode *, int);
+	void (*drop_inode) (struct inode *);
+	void (*delete_inode) (struct inode *);
+	void (*put_super) (struct super_block *);
+	int (*sync_fs)(struct super_block *sb, int wait);
+	int (*freeze_fs) (struct super_block *);
+	int (*unfreeze_fs) (struct super_block *);
+	int (*statfs) (struct dentry *, struct kstatfs *);
+	int (*remount_fs) (struct super_block *, int *, char *);
+	void (*clear_inode) (struct inode *);
+	void (*umount_begin) (struct super_block *);
+
+	int (*show_options)(struct seq_file *, struct dentry *);
+
+	ssize_t (*quota_read)(struct super_block *, int, char *, size_t, loff_t);
+	ssize_t (*quota_write)(struct super_block *, int, const char *, size_t, loff_t);
+	int (*nr_cached_objects)(struct super_block *);
+	void (*free_cached_objects)(struct super_block *, int);
+
+List of features:
+ * contype - real or calculated
+   - per-fs, no opportunities for overloading
+ * metafiles
+   - default: per-fs
+   - contype can overload
+     * Maybe - there's a case to be made that metafiles should be per-fs only, since any metafile defined by a contype is likely better suited to be a subfile
+     * counter-example: on an fs that doesn't support mtime, but the file has a subfile which provides it. So possibly, metadata subfiles can/should be normal metafiles?
+ * subfiles
+   - depend on contype
+   - default to leaf
+
+contype_t get_contype(struct inode*)
+	// ordered by specificity
+	inode.get_contype(inode)
+	|| inode.fs.get_contype(inode)
+	|| default_get_contype(inode) // defer to something like `file`
+
+struct contype_operations {
+	lookup() - contype only provides subfiles and metafiles
+	 - contype controls the returned inode, so custom behaviors allowed
+	name?
+	
+	not read/write/open/sync/release/rename/remove, all of these are inode and fs operations
+}
+Note: contype should only add functionality, never remove or overload
+
+lookup:
+ * inode.lookup(inode, path)
+ * get_contype(inode).lookup(inode, path)
+ * inode.fs.lookup(inode, path)

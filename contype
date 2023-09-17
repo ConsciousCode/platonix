@@ -1,0 +1,1922 @@
+struct contype {
+	MIBenum encoding : 12
+	uint supertype : 2
+	uint subtype : 18
+	
+	// optional
+	
+}
+
+struct WebContype {
+	uint encoding : 3; // text encodings assume UTF-8 and perform encoding checks for other unicode variants
+	uint class : 5; // root = composite
+	uint type : 8;
+}
+
+lil ... big
+
+0 binary
+1 text
+
+00 misc 0
+	0... unknown 0
+	10 primitive 4
+		10 int 20
+		01 real 36
+		11 string 52
+	01 composite 8
+	11 technical 12
+10 media 1
+	100 audio 5
+	010 image 9
+	110 video 13
+	001 model 17
+	101 doc   21
+	011 style 25
+	111 multi 29
+01 exec 2
+	10 object 6
+	01 source 10
+	11 script 14
+11 meta 3
+	0... metatype
+	100 protocol 72
+	010 fs 11
+		10 file      45
+		01 directory 75
+		11 link      59
+	110 archive 15
+	001 app 19
+		10 vendor  45
+		01 vanity  77 
+		11 example 109
+	101 config 23
+	011 
+	111 
+
+unknown
+int
+real
+string
+
+composite
+technical
+audio
+image
+
+video
+model
+doc
+style
+
+multi
+object
+source
+script
+
+protocol
+fs
+archive
+app
+config
+
+u1 text/binary
+u5 class
+
+What we want to encode in order of importance:
+* actual file type
+* encoding (binary/various text encodings)
+* class
+* embedder syntax (xml, json, yaml, etc)
+
+What is the point of having a prefix code? I cited future-proofing, but you'd have about as much proofing by incrementing the largest id. Prefix codes allow for determination of the general category of an unrecognized type? But the class isn't expected to change all that much, most of the novelty comes in the form of specific ids.
+
+Goal: Provide a unique 32-bit identifier for all common data formats, allowing for variations in encoding, with a human-readable textual representation
+
+Goal: Perfect interoperability with MIME
+ * Any valid MIME type can be interpreted as a contype
+ * ;charset=* -> contype prefix
+ * Alias classes
+   - application/*
+   - chemical/*
+   - text/*
+   - model/* -> image/3d/*
+   - example/*
+   - message/* -> meta/*
+   - multipart/* -> meta/*
+   - font/* -> style/font/*
+   - vnd.* -> app/*
+   - example/* -> meta/example
+   - prs.* -> meta/vanity
+   - x.* or x-* -> search for *
+
+Formats:
+ * var-contype
+   - Contype using LEB128 encoding, variable size
+ * micro-contype
+   - single byte encoding of the top 256 most common formats
+   - expected to be volatile, not for long-term use
+ * web-contype
+   - two byte encoding of "websafe" formats - removes alternate text encodings, deprecated, obsolete, legacy, and rare formats
+   - much more stable but doesn't support obscure contypes
+ * contype
+   - four bytes encoding many formats and encodings
+   - canonical format, integer value guaranteed to be stable
+ * ex-contype
+   - eight bytes, contype + another four bytes describing extra metadata which may be found in the file itself (eg ogg mp3 and ogg vorbis would have different contype extensions)
+
+To enable future-proofing, classes "grow" MSB to LSB, whereas types "grow" LSB to MSB, essentially creating a "wall" of zero bits between the two. Thus old standards are preserved, and new standards can make use of the unused bits, which older implementations will recognize as an unknown class/type
+
+Text to binary representation conversion:
+ * Everything is case insensitive
+ * Classes and subclasses are collated into a flat set of the maximally expanded subclasses such that there are no duplicates
+ * Get subset of classes with the provided class in their hierarchy
+ * Search for the subtype in a collated alias table
+ *
+ * For example, media/png and image/png result in the same binary contype
+
+Type entry fields:
+	parent: strict superset (eg xml)
+	tags:
+	magic:
+	extensions: (in order of preference), may be empty
+	standards: (converting to other enumerations eg mime, iso, rfc)
+	names: (in order of preference)
+	related: (other formats which can be losslessly converted to)
+	format: description of how to decompose the format into subtypes
+
+Standard tags:
+#fourcc
+#deprecated - don't generate such files, but they can be kept in their current format
+#obsolete - attempts should be made to convert to equivalent formats (lest they lose all compatibility) and generating the format is forbidden. Anything #obsolete is guaranteed to have at least one injective alternative
+#legacy - modern formats made to interface with obsolete technology, eg emulator files
+#proprietary - created/owned by a private organization
+#protected - legally protected, implementing decoding may be illegal
+#unknown - format is known to exist, but its encoding is unknown (needs to be reverse-engineered)
+#lossy - converting to this format will lose information
+#lossless - no information will be lost while converting
+#nonstandard - not accepted by a recognized standardization authority
+#unbroken-crypto - some or all of the file's structure is behind some kind of cryptography, often for DRM purposes
+#cat:<category> - used for alias classes
+
+Encoding names:
+ * case-insensitive, has normal form
+ * a-z, 0-9, -
+
+Encodings can differentiate format encodings if:
+ * Formats are binary and textual
+ * An encoding is "binary" if it has the type "binary" or is binary encoding
+
+[encoding:]class.../type[+subtype][;attr=value...]
+* Each type has an assumed encoding which allows it to be excluded
+* Class may have multiple components separated by slashes
+
+Textual binary encodings:
+* All are assumed to be subsets of ASCII
+* Intended for arbitrary data encoding
+* 00 binary
+* 01 text
+* 02 percent (hex escaped)
+* 03 base32 - human readable
+* 04 base64
+  - Different formats can be disambiguated with content scanning:
+  - base64 +/ =
+  - base64url -_ =
+  - base64yui ._ -
+  - base64fs +_ =
+* 05 dul58 - bitcoin addresses and IPFS hashes
+* 06 multibase
+* 07 unknown - for unknown/unsupported encodings, overloaded in webcontype with "anything that doesn't fit in 3 bits"
+* Encodings after this are excluded from webcontype
+* 08 hex
+* 09 qp "quoted parsable"
+* 10 base32hex - contiguous
+* 11 zbase32
+* 12 base36
+* 13 dlu58
+* 14 uuenc
+* 15 xxenc
+* 16 binhex
+* 17 6pack
+* 18 btoa85
+* 19 adobe85
+* 20 yEnc
+
+Type names:
+ * Case-insensitive, have normal form (which may be cased)
+ * a-z, 0-9, -, +, .
+ * Classes are alpha-only
+
+0 primitive
+	00 int
+		--- split middle
+		0 static size
+			0 unsigned
+				0 le
+					blob bit nibble byte
+					16 24 32 48 64 128 256
+				1 be
+			1 signed
+				0 le
+				1 be
+			
+			00 blob
+			01 u16-le
+			02 u24-le
+			03 u32-le
+			04 u48-le
+			05 u64-le
+			06 u128-le
+			07 u256-le
+			
+			08 bit
+			09 u16-be
+			10 u24-be
+			11 u32-be
+			12 u48-be
+			13 u64-be
+			14 u128-be
+			15 u256-be
+			
+			16 nibble
+			17 s16-le
+			18 s24-le
+			19 s32-le
+			20 s48-le
+			21 s64-le
+			22 s128-le
+			23 s256-le
+			
+			24 byte
+			25 s16-be
+			26 s24-be
+			27 s32-be
+			28 s48-be
+			29 s64-be
+			30 s128-be
+			31 s256-be
+		1 varint
+			00 uleb128
+			01 sleb128
+			02 vlq
+			03 vlq+git
+			04 zigzag
+			05 clzprefix // # bytes = clz(first), rest is data
+			06 lesqlite
+			07 lesqlite2
+			08 vbr / llvm-varint
+			09 dlugosz
+	
+	01 real
+		ms-float32 (microsoft binary format)
+		ms-float40
+		ms-float64
+		ibm-hexfloat
+		ieee-float8
+		ieee-float16
+		ieee-float32
+		ieee-float64
+		ieee-float128
+		ieee-float256
+		bfloat16
+		nvidia-tensorfloat
+		amd-fp24
+		fixed
+	
+	10 string
+		cstring
+		pstring8
+		pstring16
+		pstring24
+		pstring32
+		hollerith
+		gcc-mangle
+	
+	11 struct
+		bitfield
+			bits4 8 16 32
+		color
+			rgb24
+			rgba8888
+			argb8888
+			abgr8888
+			grey8
+			cymk
+			hsv
+			hsl
+		time
+
+1 composite
+	00 data
+		config
+		crypto
+			digest
+				hash
+				crc
+			encrypt
+		technical
+			bibliography
+				apa
+				mla
+				chicago
+		abstract
+			ref
+			bool
+			char
+			number
+			string
+			enum
+			list
+			map
+		app
+			proprietary
+			app/progname+extra
+	01 media
+		000 multi
+		001 audio
+		010 style
+		011 image
+			3d
+		100 video
+		101 doc
+		110 
+		111 
+	10 exec
+		00 code - machine code / bytecode
+		01 
+		10 source
+		11 script
+	11 meta
+		stream
+		proto
+			http
+			ftp
+			ssh
+			mqtt
+		archive - data that contains data
+		fs
+			file
+			directory
+			stat
+			device
+				loop
+				tty
+				mount
+				special
+			symlink
+			(hardlink) - no way to distinguish?
+			sparse
+			tmp
+			empty
+			shadow
+			pipe
+			socket
+
+---
+data = 00
+	blob
+	config
+		xml
+		json
+		yaml
+		ini
+		htaccess
+	crypto
+	
+	codec
+		lz
+		lzw
+		lz77
+		ppm
+		huffman
+		deflate
+		shannon-fano
+		fast-fourier
+		hadamard
+		discrete-cosine dct
+		
+		vorbis
+		mp3
+		flac
+		shorten
+		tta
+		alac
+		mpeg-4-als
+		wma-9
+		monkey
+		wavpack
+		mdct
+		lpc
+		dpcm
+		adpcm
+		apc
+		celp
+		aac
+		motion compensation
+		discrete wavelet transform
+		cabac
+		cavlc
+		avc
+		hapzipper
+		mafe
+		dnazip
+		genomezip
+		elias-gamma
+		elias-delta
+		elias-omega
+		exp-golomb
+		fibonacci
+		levenshtein
+		unary
+		rice
+		golomb
+		
+		lpcm
+		pcm
+		pdm
+		dsd
+		pam
+		optimfrog
+		tak
+		tta
+		wmal
+		dts-hd
+		dolby truehd
+		meridian lossless packing packed pcm
+		mpeg-4 als
+		mpeg-4 sls
+		realaudio
+		bfd lossless audio Compression
+		atrac advanced lossless
+		direct stream transfer
+		original sound quality
+		lossless audio - discontinued
+		shorten - discontinued
+		lpac
+		ltac
+		mp3 - discontinued
+		usac
+		opus
+		ietf ipmr speech codec
+		atrac
+		dolby digital ac3 atsc a/52 etsi ts 102 366
+		dolby digital+
+		dts coherent acoustics
+		dolby ac-4
+		impala
+		itu
+			g.711
+			g.711.0
+			g.711.1
+			g.718
+			g.718b
+			g.722b
+			g.719
+			g.722
+			g.722.1
+			g.722.2
+			g.723
+			g.723.1
+			g.726
+			g.728
+			g.729
+			g.729a
+			g.729d
+			g.729.1
+			g.729.1e
+		hiln
+		twinvq
+		bsac
+		mpeg-h
+		musepack
+		at&t perceptual audio coder
+		pasc
+		qdesign
+		picturetel
+			siren 7
+			siren 14
+			sire 22
+		ntt twinvq
+		voxware
+		aes3
+		smpte
+		dolbe e
+		sbc
+		cvsd 8khz
+		msbc
+		lc3
+		etsi
+		aptx
+		aptx-hd
+		aptx-low-latency
+		aptx-Adaptive
+		faststream
+		ldac
+		lhdc
+		llac
+		uat
+		hd/uhq-bt
+		scalable codec
+		nrsc-5
+		speex
+		isac
+		asao
+		picture tel pt716
+		pt724
+		rtaudio
+		svopc
+		openlpc
+		ansi/scte
+		ilbc
+		evs
+		mplp
+		inmarsat-m imbe
+		voxware metavoice
+		truespeech
+		ms-gsm
+		ms-adpcm
+		dss-sp
+		dss-qp
+		micronas intermetall sc4 mi-sc4
+		lpec
+		truespeech triple rate coder
+		
+	
+	int
+		#min
+		#max
+		#string
+		sleb128
+		uleb128
+		msbc-sint // msb set = continue 
+		msbc-uint
+		msbcc-sint // msb unset = continue
+		msbcc-uint
+		
+		bit
+		nibble
+		bitfield
+	
+	real
+		ms-float32 (microsoft binary format)
+		ms-float40
+		ms-float64
+		ibm-hexfloat
+		ieee-float8
+		ieee-float16
+		ieee-float32
+		ieee-float64
+		ieee-float128
+		ieee-float256
+		bfloat16
+		nvidia-tensorfloat
+		amd-fp24
+		ieee-754 / iec-60559
+		ieee float
+		fixed
+	
+	enum
+		#values
+		enum+int
+			MIBenum
+			UCS
+			contype
+		enum+string
+		enum+bool
+	
+	string
+		cstring
+		pstring8
+		pstring16
+		pstring24
+		pstring32
+		hollerith
+		gcc-mangle
+	
+	color
+		hexcolor
+		xorg-color
+		css-color
+		websafe
+		rgba
+			rgba8888
+			argb8888
+			abgr8888
+			grey8
+		bgr
+		gbr
+		rgba
+		cmyk
+		hsl
+		hsv
+		ycc
+	
+	time
+		unix
+		unix+ms
+		unix+us
+		unix+ns
+		iso-balbla
+	
+	reference
+	cookie
+media = 01
+	audio
+		fullname: Audible (Amazon.com)
+		names: audio/aa
+		tags: unbroken-drm
+		related: aax, mp4
+		
+		fullname: Advanced Audio Coding
+		names: audio/aac
+		tags: lossy codec
+		extensions:
+		standards:
+			iso: 13818-7, 14496-3
+			mime: audio/aac, audio/aacp
+		rfc: 3016, 3640, 4281, 4337
+		
+		fullname: Audio Data Interchange Format
+		names: audio/adif
+		tags: container
+		parent: iso-68960
+		
+		fullname: Audio Data Transport Stream
+		names: stream/adts
+		tags: audio
+		extensions: adts
+		
+		fullname: Audible Enhanced Audiobook
+		names: audio/aax
+		extensions: aax
+		
+		names: audio/act
+		related: mp4
+		
+		fullname: Audio Interchange File Format
+		names: audio/aiff
+		extensions: aiff, aif, aifc
+		tags: uncompressed
+		parent: archive/iff
+		related: aiff-c, aifc
+		standards:
+		  mime: audio/x-aiff, audio/aiff
+		  type code: aiff, aifc
+		  uti: public.aiff-audio, public.aifc-audio
+		
+		fullname: Apple Lossless Audio Codec
+		names: audio/alac, audio/ale
+		extensions: alac
+		tags: lossless codec
+		
+		fullname: Core Audio Format
+		names: audio/caf
+		extensions: caf
+		standards:
+		  mime: audio/x-caf
+		
+		fullname: Adaptive Multi-Rate
+		names: audio/amr
+		extensions: amr
+		tags: codec
+		related: audio/3gpp, audio/3gpp2
+		standards:
+		  mime: audio/amr
+		
+		fullame: Monkey's Audio
+		names: audio/monkey
+		extensions: ape, apl
+		tags: lossless
+		
+		names: audio/au
+		magic: .snd
+		extensions: au, snd
+		standards:
+		  mime: audio/basic
+		
+		fullname: Adaptive Multi-Rate Wideband
+		names: audio/amr-wb
+		extensions: awb
+		tags: codec
+		standards:
+		  mime: audio/amr-wb
+		  itu-t: G.722.2
+		
+		names: audio/dct
+		extensions: dct
+		tags: container
+		
+		fullname: Digital Speech Standard
+		names: audio/dss
+		extensions: dss
+		tags: proprietary lossy
+		
+		names: audio/dvf
+		extensions: dvf
+		tags: proprietary
+		related: audio/wav
+		
+		fullname: Free Lossless Audio Codec
+		magic: fLaC
+		extensions: flac
+		tags: open-source lossless codec
+		standards:
+		  mime: audio/flac
+		  uti: org.xiph.flac
+		
+		names: audio/gsm
+		extensions: gsm, fr
+		tags: lossy codec
+		standards:
+		  etsi: 300 961
+		
+		fullname: iKlax
+		names: audio/iklax
+		tags: open-source
+		standards:
+		  mime: audio/iklax
+		  arXiv: 0901.3902
+		
+		fullname: Internet Video Streaming
+		names: audio/ivs
+		tags: proprietary container
+		
+		fullname: Synthetic music Mobile Application Format
+		names: audio/mmf
+		extensions: mmf, smaf
+		
+		fullname: MPEG-2 Audio Layer III
+		names: audio/mp3
+		extensions: mp3, bit
+		tags: lossy codec
+		standards:
+		  mime: audio/mpeg, audio/mpa, audio/mpa-robust
+		
+		fullname: Musepack
+		names: audio/musepack
+		magic: MPCK, MP+
+		extensions: mpc, mp+, mpp
+		tags: lossy codec
+		standards:
+		  mime: audio/x-musepack, audio/musepack
+		
+		fullname: Memory Stick compressed Voice files
+		names: audio/msv
+		tags: proprietary lossy
+		
+		fullname: NICE Media player audio File
+		names: audio/nice
+		extensions: nmf
+		tags: proprietary
+		
+		fullname: NES Sound Format
+		names: audio/nes
+		tags: legacy proprietary
+		
+		fullname: Ogg
+		names: audio/ogg, video/ogg
+		magic: OggS
+		extensions: ogg, ogv, oga, mogg, ogx, ogm, spx, opus
+		tags: open-source container
+		standards:
+		  mime: video/ogg, audio/ogg, application/ogg
+		
+		fullname: Opus
+		names: audio/opus
+		extensions: opus
+		tags: lossy codec
+		standards:
+		  mime: audio/opus
+		  rfc: 6716
+		
+		fullname: RealAudio
+		names: audio/realaudio, stream/realaudio
+		extensions: ra, ram
+		tags: proprietary container
+		standards:
+		  mime: audio/vnd.rn-realaudio, audio/x-pn-realaudio
+		
+		fullname: Pulse-Code Modulation 8-bit
+		names: audio/pcm8
+		extensions: l8, pcm, raw
+		tags: uncompressed codec
+		standards:
+		  mime: audio/L8
+		
+		fullname: Pulse-Code Modulation 16-bit
+		names: audio/pcm16
+		extensions: l16, pcm, raw
+		tags: uncompressed codec
+		standards:
+		  mime: audio/L16
+		
+		fullname: Pulse-Code Modulation 20-bit
+		names: audio/pcm20
+		extensions: l20, pcm
+		tags: uncompressed codec
+		standards:
+		  mime: audio/L20
+		
+		fullname: Pulse-Code Modulation 24-bit
+		names: audio/pcm24
+		extensions: l24, pcm
+		tags: uncompressed codec
+		standards:
+		  mime: audio/L24
+		
+		fullname: Signed Linear Pulse-Code Modulation
+		names: audio/spcm16
+		extensions: l16, pcm
+		tags: uncompressed codec
+		
+		fullname: Wave
+		name: audio/wave
+		parent: media/exif
+		extensions: wav, rf64, bwf
+		tags: uncompressed container
+		
+		fullname: The True Audio
+		names: audio/trueaudio
+		extensions: tta
+		tags: lossless codec
+		standards:
+		  mime: audio/x-tta
+		
+		fullname: Creative Voice
+		names: audio/creative
+		magic: Creative Voice File\x1a\x1a\0
+		extensions: voc
+		tags: container
+		
+		fullname: Dialogic ADPCM
+		names: audio/dialogic
+		extensions: vox
+		tags: lossy
+		
+		fullname: Windows Media Audio
+		names: audio/wma
+		extensions: wma
+		tags: proprietary codec
+		
+		fullname: WavPack
+		names: audio/wavpack
+		tags: open-source lossless container
+		extensions: wv
+		related: audio/wave
+		
+		fullname: WebM
+		names: audio/webm, video/webm (media/webm?)
+		tags: open-source container
+		extensions: webm
+		standards:
+		  mime: video/webm, audio/webm
+		
+		fullname: 8-Bit Sampled Voice
+		names: audio/8svx
+		parent: iff
+		tags: container
+		standards:
+		  mime: audio/x-8svx
+		
+		fullname: Compact Disc Digital Audio
+		names: audio/cdda
+		extensions: cda
+		
+		fullname: Game Boy Advance Song File
+		names: audio/gba
+		extensions: minigsf
+		
+	image
+		#raster
+		#lossy
+		#lossless
+		#vector
+		#obsolete (objectively better formats exist)
+		#deprecated
+		
+		fullname: Windows Animated Cursor
+		names: anim/ms-cursor
+		extensions: ani
+		
+		fullname: Windows Icon
+		names: image/ms-icon
+		exensions: ico, cur
+		
+		fullname: Amiga Animation File
+		names: anim/amiga
+		parent: iff
+		
+		fullname: AOL Compressed Image File
+		names: anim/aol
+		extensions: art
+		
+		fullname: CALS Raster
+		names: image/cals
+		extensions: cal
+		
+		fullname: CPC Compressed Image
+		names: image/cpc
+		extensions: cpc
+		tags: monochrome
+		
+		fullname: DirectDraw Surface
+		names: image/directdraw
+		extensions: dds
+		
+		fullname: OpenEXR Image
+		names: image/openexr
+		extensions: exr
+		
+		names: anim/autodesk
+		extensions: flic
+		
+		fullname: FlashPix Bitmap Image
+		names: image/flashpix
+		extensions: fpx
+		
+		fullname: High Efficiency Video Coding
+		names: video/h.265
+		extensions: hevc
+		
+		fullname: MacOS Icon Resource
+		names: image/mac-icon
+		extensions: icns
+		
+		fullname: Joint Bi-level Image
+		names: image/jbig
+		extensions: jbg, jbig
+		standards:
+		  iso: 11544
+		  itu-t: T.82, T.85
+		
+		fullname: Joint Bi-level Image 2
+		names: image/jbig2
+		extensions: jbg, jbig2
+		standards:
+		  itu: T.88
+		  iso: 14492
+		
+		fullname: JPEG Network Graphics
+		names: image/jng
+		extensions: jng
+		
+		fullname: Magick Image File Format
+		names: image/magick
+		extensions: miff
+		
+		fullname: Ulead PhotoImpact
+		names: image/photoimpact, app/photoimpact (?)
+		extensions: ufo, ufp
+		
+		fullname: Wireless Application Protocol Bitmap
+		names: image/wbmp
+		extensions: wbmp
+		standards:
+		  mime: image/vnd.wap.wbmp
+		
+		fullname: WebP
+		names: image/webp
+		magic:
+		  offset: 8
+		  value: "WEBPVP8 "
+		extensions: webp
+		parent: riff
+		
+		fullname: X Bitmap
+		names: image/x-bitmap
+		extensions: xbm
+		standards:
+		  mime: image/x-xbitmap, image/x-xbm
+		
+		fullname: X Pixmap 1
+		names: image/x-pixmap1
+		extensions: xpm
+		
+		fullname: X Pixmap 2
+		names: image/x-pixmap2
+		extensions: xpm
+		
+		fullame: X Pixmap 3
+		names: image/x-pixmap3
+		extensions: xpm
+		
+		fullname: X Window Dump
+		names: image/x-windump
+		extensions: xwd
+		
+		fullname: Camera Image File
+		names: image/canon1
+		extensions: crw, ciff
+		tags: obsolete
+		related: image/canon2
+		
+		fullname: Canon Raw Image
+		names: image/canon2
+		extensions: cr2
+		
+		fullname: Digital Negative
+		names: image/negative
+		extensions: dng
+		
+		fullname: Extended Vector Animation
+		names: anim/eva
+		extensions: eva
+		standards:
+		  mime: application/x-eva
+		
+		fullname: Windows Metafile
+		names: image/metafile
+		extensions: wmf, emf
+		
+		fullname: Gerber
+		names: image/gerber
+		extensions: gbr
+		standards:
+		  mime: application/vnd.gerber
+		  uti: com.ucamco.gerber.image
+		
+		fullname: Haiku Vector Icon Format
+		names: image/haiku
+		magic: ncif
+		
+		fullname: Initial Graphics Exchange Specification
+		names: image/iges
+		
+		fullname: Standard for the Exchange of Product model data
+		names: image/step
+		standards:
+		  iso: 10303
+		
+		fullname: DjVu
+		names: image/djvu
+		extensions: djvu, djv
+		standards:
+		  mime: image/vnd.djvu, image/x-djvu
+		
+		fullname: Xar
+		names: image/xar
+		extensions: xar
+		
+		fullname: Drawing Inerchange Format
+		names: image/dxf
+		extensions: dxf
+		standards:
+		  mime: image/vnd.dxf
+		
+		fullname: Exchangeable Image File
+		names: media/exif
+		
+		fullname: Extensible Application Markup Language
+		names: doc/xaml
+		extensions: xaml, xml
+		standards:
+		  mime: application/xaml+xml
+		
+		fullname: Binary Application Markup Language
+		names: doc/baml
+		
+		fullname: Extensible Metadata Platform
+		names: config/xmp
+		parent: config/xml
+		
+		fullname: JPEG
+		names: image/jpeg
+		magic: 0xffd8ff
+		extensions: jpg, jpeg, jpe, jif, jfif, jfi
+		standards:
+		  mime: image/jpeg
+		  type code: JPEG
+		  uti: public.jpeg
+		  iso: 10918
+		  itu-t: T.81, T.83, T.84, T.86
+		
+		fullname: Tagged Image File Format
+		names: image/tiff
+		extensions: tiff, tif
+		standards:
+		  mime: image/tiff, image/tiff-fx
+		  type code: TIFF
+		  uti: public.tiff
+		
+		fullname: Graphics Interchange Format
+		names: anim/gif
+		magic: /GIF\d+a/
+		standards:
+		  mime: image/gif
+		  type code: GIFf
+		  uti: com.compuserve.gif
+		  
+		fullname: Bitmap
+		names: image/bitmap
+		extensions: bmp, dib
+		standards:
+		  mime: image/bmp, image/x-bmp
+		  type code: "BMP ", BMPf, BMPp
+		  uti: com.microsoft.bmp
+		
+		fullname: Portable Network Graphics
+		names: image/png
+		extensions: png
+		magic: 0x89, "PNG\r\n", 0x1a0a
+		standards:
+		  mime: image/png
+		  type code: PNGf, PNG
+		  uti: public.png
+		  iso: 15948
+		  rfc: 2083
+		
+		fullname: Multiple-image Network Graphics
+		names: anim/mng
+		magic: 0x8A, "MNG\r\n", 0x1a0a
+		extensions: mng
+		standards:
+		  mime: video/x-mng
+		
+		fullname: Animated Portable Network Graphics
+		names: anim/apng
+		parent: png
+		extensions: png, apng
+		
+		fullname: Portable Pixmap
+		names: image/p-pixmap
+		extensions: pbm, pgm, ppm, pnm
+		standards:
+		  mime: image/x-portable-bitmap, image/x-portable-graymap, image/x-portable-pixmap, image/x-portable-anymap
+		  uti: public.pbm
+		
+		fullname: TrueMotion S
+		names: video/truemotion-s
+		magic: DUCK, TMOT
+		
+		fullname: TrueMotion RT
+		names: video/truemotion-rt
+		
+		fullname: TrueMotion 2
+		names: video/truemotion2
+		
+		fullname: TrueMotion VP3/4
+		names: video/truemotion4
+		
+		fullname: TrueMotion VP5/6
+		names: video/truemotion6
+		
+		fullname: TrueMotion VP7
+		names: video/truemotion7
+		
+		fullname: TrueMotion 8
+		names: video/truemotion8
+		standards:
+		  rfc: 6386
+		
+		fullname: VP9
+		names: video/vp9
+		
+		fullname: AV1
+		names: video/av1
+		
+		fullname: High Efficiency Image File Format
+		names: image/heif
+		extensions: heif, heifs, heic, heics, avci, avcs, avif, avifs
+		parent: video/
+		standards:
+		  mime: image/heif, image/heif-sequence, image/heic, image/heic-sequence
+		  uti: public.heif, public.heic
+		  iso: 23008-12
+		
+		fullname: Better Portable Graphics
+		names: image/bpg
+		magic: "BPG", 0xfb
+		
+		fullname: Drawn File
+		names: image/drawn
+		extensions: drw, drawn, drawing
+		
+		fullname: Enhanced Compression Wavelet
+		names: image/ecw
+		extensions: ecw
+		tags: proprietary
+		
+		fullname: Flexible Image Transport System
+		names: image/fits
+		extensions: fits, fit, fts
+		standards:
+		  mime: image/fits, application/fits
+		
+		fullname: Free Lossless Image Format
+		names: image/flif
+		extensions: flif
+		magic: FLIF
+		standards:
+		  mime: image/flif
+		  uti: public.flif
+		
+		fullname: Interleaved Bitmap
+		names: image/ilbm
+		magic: FORM
+		extensions: iff, lbm, bbm
+		parent: media/iff
+		
+		fullname: JPEG Extended Range
+		names: image/jpeg-xr
+		extensions: jxr, hdp, wdp
+		standards:
+		  mime: image/vnd.ms-photo, image/jxr
+		  itu-t: T.832
+		  iso: 29199-2:2012
+		
+		fullname: Nearly Raw Raster Data
+		names: image/nrrd
+		extensions: nrrd
+		
+		fullname: Portable Arbitrary Map
+		names: image/pam
+		extensions: pam
+		parent: image/pnm
+		standards:
+		  mime: image/x-portable-arbitrarymap
+		
+		fullname: PiCture eXchange
+		names: image/pcx
+		extensions: pcx
+		tags: obsolete
+		standards:
+		  mime: image/vnd.zbrush.pcx, image/x-pcx
+		
+		fullname: Progressive Graphics
+		names: image/pgf
+		magic: "PGF"
+		extensions: pgf
+		
+		fullname: Planar Bitmap
+		names: image/planar-bitmap
+		extensions: pbm
+		
+		fullname: Silicon Graphics Image
+		names: image/sgi
+		extensions: sgi, rgb, rgba, bw, int, inta
+		standards:
+		  mime: image/sgi
+		  type code: .SGI
+		
+		fullname: Multiresolution Seamless Image Database
+		names: image/mrsid
+		extensions: sid
+		standards:
+		  mime: image/x-mrsid, image/x.mrsid, image/x-mrsid-image
+		
+		fullname: Sun Raster
+		names: image/sun-raster
+		extensions: ras, sun
+		
+		fullname: TrueVision Graphics Adapter
+		names: image/targa
+		extensions: tga, icb, vda, vst
+		standards:
+		  mime: image/x-targa, image/x-tga
+		  type code: TPIC
+		  uti: com.truevision.tga-image
+		
+		fullname: Video Image Communication and Retrieval
+		names: image/vicar
+		
+		fullname: Extensible Image Serialization Format
+		names: image/xisf
+		extensions: xisf
+		
+		fullname: Affinity Photo Document
+		names: app/affinity-photo
+		extensions: afphoto
+		
+		fullname: Chasys Draw Image
+		names: app/chasys-draw
+		extensions: cd5
+		
+		fullname: Corel Photo Paint
+		names: app/corel-photo
+		extensions: cpt
+		
+		fullname: Krita
+		names: app/krita
+		extensions: kra
+		
+		fullname: Medibang and FireAlpaca
+		names: app/medibang
+		extension: mdp
+		
+		fullname: Paint.NET
+		names: app/paint.net
+		extension: pdn
+		
+		fullname: Adobe PhotoShop Document
+		names: app/adobe-photoshop
+		extensions: psd
+		
+		fullname: Corel Paint Shop Pro
+		names: app/corel-paintshop
+		extensions: psp
+		
+		fullname: Paint Tool SAI
+		names: app/sai
+		extensions: sai
+		
+		fullname: eXperimental Computing Facility format
+		names: app/gimp-xcf
+		extensions: xcf
+			
+		fullname: Encapsulated PostScript
+		names: doc/eps
+		extensions: eps, epsf, epsi
+		parent: doc/postscript
+		standards:
+			mime: application/postscript, application/eps, application/x-eps, image/eps, image/x-eps
+			type code: epsf, text
+			uti: com.adobe.encapsulated-postscript
+		
+		fullname: PostScript
+		names: doc/postscript
+		magic: %!
+		extensions: ps
+		standards:
+			mime: application/postscript
+			uti: com.adobe.postscript
+		
+		pict
+		wmf / emf
+		swf
+		xaml
+		
+		fullname: Computer Graphics Metafile
+		names: image/cgm
+		tags: obsolete
+		related: svg, dxf
+		standards:
+		  iso: 8632
+		  mime: image/cgm
+		
+		fullname: Scalable Vector Graphics
+		names: image/svg
+		parent: config/xml
+		standards:
+		  mime: image/svg+xml
+		  uti: public.svg-image
+		
+		fullname: Affinity Designer document
+		names: app/affinity-designer
+		extensions: afdesign
+		
+		fullname: Adobe Illustrator Artwork
+		names: app/adobe-illustrator
+		extensions: ai
+		
+		fullname: CorelDRAW
+		names: app/corel-draw
+		extensions: cdr
+		
+		fullname: DrawingML
+		names: image/drawingml
+		tags: obsolete
+		related: image/svg
+		
+		fullname: Graphics LayoutEngine
+		names: image/gle
+		extensions: gle
+		
+		fullname: North American Presentation Level Protocol Syntax
+		names: image/naplps
+		tags: obsolete
+		related: image/svg
+		
+		fullname: OpenDocument Graphics
+		names: image/opendoc
+		
+		fullname: !DRAW
+		names: image/risc-draw
+		
+		fullname: PSTricks
+		names: doc/tex+ps
+		parent: doc/tex
+		
+		fullname: Quilt EZ
+		names: app/qcc
+		extensions: qcc
+		
+		fullname: Remote Graphic Instruction Set
+		names: image/regis
+		
+		fullname: Remote Imaging Protocol
+		names: image/ripscrip
+		
+		fullname: Vector Markup Language
+		names: image/vml
+		tags: obsolete legacy
+		related: svg
+		parent: config/xml
+		extensions: htm, html
+		standards:
+		  mime: application/vnd.openxmlformats-officedocument.vmlDrawing
+		  ecma: 376
+		  iso: 29500:2008
+		
+		fullname: Open XML Paper Specification
+		names: doc/openxps
+		extensions: oxps, xps
+		standards:
+		  mime: application/oxps, application/vnd.ms-xpsdocument
+		  ecma: 388
+		
+	video
+		webm
+		mkv
+		flv
+		f4v
+		vob
+		ogv ogg
+		drc
+		gif
+		gifv
+		avi
+		mts m2ts ts
+		wmv
+		yuv
+		rm
+		rmvb
+		asf
+		amv
+		mpg mp2 mpeg mpe mpv
+		mpg mpeg m2v
+		m4v
+		svi
+		mxf
+		roq
+		
+		fullname: Nullsoft Streaming Video
+		names: video/nsv
+		magic: NSVf
+		tags: obsolete
+		related: mp4
+		extensions: nsv
+		
+		fullname: ISO/IEC base media file format
+		name: media/iso-base
+		parent: video/mov
+		extensions:
+		tags: standard
+		standards:
+		  rfc: 6381
+		  iso: 68960
+		
+		fullname: MPEG-4
+		names: video/mp4, video/mpeg-4, audio/mp4, audio/mpeg-4, audio/m4a, audio/m4b, audio/m4p
+		parent: media/iso-base
+		extensions: mp4, m4a, m4p, m4b, m4r, m4v
+		standards:
+		  mime: video/mp4
+		  iso: 14496-14
+		  rfc: 4337
+		
+		fullname: 3rd Generation Partnership Program
+		names: video/3gp, audio/3gp
+		parent: media/iso-base
+		standards:
+		  uti: public.3gpp
+		  rfc: 3839
+		  mime: video/3gpp, audio/3gpp
+		
+		fullname: 3rd Generation Partnership Program 2
+		names: video/3g2, video/3gp2, audio/3g2, audio/3gp2
+		parent: media/iso-base
+		standards:
+		  uti: public.3gpp
+		  rfc: 4393
+		  mime: video/3gpp2, audio/3gpp2
+		
+		fullname: Motion JPEG 2000
+		names: video/mj2, video/mjp2
+		extensions: mj2, mjp2
+		parent: media/iso-base
+		magic: 0x0000000C6A5020200D0A870A
+		standards:
+		  itu-t: T.802
+		  rfc: 3745
+		  iso: 15444-3:2007
+		  mime: video/mj2
+		
+		names: video/dcf
+		extensions: dcf
+		parent: media/iso-base
+		standards:
+		  mime: application/vnd.oma.drm.dcf
+		
+		fullname: MPEG-21
+		names: video/mpeg-21
+		extensions: mp21, m21
+		parent: media/iso-base
+		
+		fullname: Flash Video
+		names: video/flv
+		magic: FLV\1
+		extensions: flv
+		parent: media/iso-base
+		standards:
+		  mime: video/x-flv
+		
+		fullname: Flash Video
+		names: video/f4v
+		parent: video/swf
+		extensions: f4v, f4p, f4a, f4b
+		standards:
+		  mime: video/x-flv
+	3d
+		amf
+		asymptote
+		blend
+		collada
+		dgn
+		dwf
+		dwg
+		edrawings
+		flt
+		fvrml
+		hsf
+		iges
+		imml
+		ipa
+		jt
+		ma maya ascii
+		mb maya binary
+		obj wavefront
+		opengex
+		ply
+		pov-ray
+		prc
+		step
+		skp
+		stl
+		u3d
+		vrml
+		xaml
+		xgl
+		xvl
+		xvrml
+		x3d
+		.3d
+		3df
+		.3dm
+		.3ds
+		3dxml
+		x3d
+		
+		Stereo
+			mpo
+			pns
+			jps
+	font
+		ttf
+		otf
+		woff
+		amfm
+		mf metafont file
+		xfn
+		vnf
+		fnt
+		pfa
+		sfd
+		vlw
+		fot
+		odttf
+		gxf
+		pfb
+		ext
+		chr
+		vfb
+		bdf
+		jfproj
+		pmt
+		woff2
+		pfm
+		compositefont
+		gdr
+		gf metafont
+		abnf
+		fon
+		ttc
+		acfm
+		mxf
+		pcf
+		sfp
+		glif
+		tfm
+		pfr
+		t65
+		dfont
+		pk
+		eot
+		afm
+		xft
+		lwfn
+		ffil
+		suit
+		mcf
+		nftr
+		txf
+		tte
+		cha
+		ufo
+		ytf
+		f3f
+		euf
+		pf2
+		fea
+		
+	doc
+		amigaguide
+		doc
+		djvu
+		docbook
+		html htm
+		xhtml
+		fb2
+		docx
+		odt
+		sxw
+		oxps
+		palmdoc
+		pages
+		pdf
+		pdf/x pdf/a pdf/e iso-32000 pdf/ua pdf/vt
+		ps postscript
+		rtf
+		sylk
+		svg
+		tex
+		tei
+		troff
+		uniform office format
+		wordperfect wpd wp wp7 doc
+		kml kmz
+		markdown md
+		mathml
+		svg
+		latex
+		wiki
+		x3d
+		xhtml-mp
+		sgml
+		xml
+		abc
+		asciidoc
+		asciidoctor
+		cml chemical markup
+		chtml compact html
+		computable document format
+		conTeXt
+		dita
+		docbook
+		elml
+		ead
+		enriched text
+		gml
+			generalized markup
+			geography markup
+			gesture markup
+			graffiti markup
+		guideml
+		hdml
+		helpml
+		hytime
+		hypertex
+		ipf
+		jats
+		lilypond
+		linuxdoc
+		lout
+		mif
+		maml
+		mei
+		musicxml
+		omdoc
+		openmath
+		parameter value language
+		plain old documentation
+		pillar
+		rtml
+		rest restructrued text
+		rtml
+		rft
+		s1000d
+		scribe
+		script IBM on which GM built
+		sisu - structured information serialized units
+		skical
+		skriv
+		texinfo
+		text encoding initiative
+		textile
+		troffgroff
+		udo
+		wireless markup language wml
+		wtvml wireless tv markup language
+		xupl
+		bach
+		compound document format
+		office opem xml ooxml
+			spreadsheetml
+			presentationml
+			wordprocessingml
+			microsoft office 2003 xml formats
+		opendocument odf
+			openoffice.org xml
+		reportml
+		fhtml
+		bbcode
+		crossmark
+		afp advanced function presentation
+		canon garo graphic arts language with raster operations
+		common ground page definition language
+		cpcl
+		dpl
+		dtpl
+		dvi
+		d411
+		epl
+		envoy
+		esc/p epson standard code for printers
+		esc/p2
+		esc/page
+		esc/pos
+		fgl friendly ghost language
+		fingerprint
+		hp-gl
+		interpress
+		ijpds
+		ipds
+		igp/pgl
+		ipl
+		kpdl
+		lcds/metacode
+		modca
+		mtpl
+		pcl
+		ppds
+		rpcs
+		rtl
+		star line mode
+		spl samsung printer language
+		canon sg raster
+		tspl/tspl2 tsmc
+		ttp
+		ufr
+		xes
+		zjs
+		zpl zebra programming language
+		pjl
+		creole
+		multimarkdown
+		org-mode
+		pmwiki
+		texy
+		txt2tags
+		slack
+		whatsapp
+		atx
+		reST
+		setext
+		tpz
+		apnx
+		lrs
+		tk3
+		mart
+		lrf
+		tr tomereader 2
+		ibooks
+		azw3
+		kfx
+		azw4
+		fb2
+		azw
+		ebk
+		jwpub
+		rzs
+		webz
+		htz4
+		aep
+		ncx
+		mbp
+		phl
+		dnl
+		rzb
+		ceb
+		htz5
+		prc
+		lit
+		nva
+		cbc
+		opf
+		lrx
+		ea kindle end actions
+		ybk
+		acsm
+		ava
+		cebx
+		snb
+		edn
+		tr3
+		orb
+		bkk
+		etd
+		eal
+		htxt
+		azw1
+		tcr
+		oeb
+		koob
+		html0
+		htmlz
+		qmk
+		pmlz
+		bpnueb
+		pef
+		oebzip
+		fkb
+		vbk
+		han
+		pobi
+		pml palm markup language
+		
+		Documentation generators:
+			ddoc
+			document! x
+			doxygen
+			epydoc
+			fpdoc
+			haddock
+			headerdoc
+			imagix 4d
+			javadoc
+			scaladoc
+			jsdoc
+			jsdoc toolkit
+			mkd
+			natural docs
+			ndoc
+			pandoc
+			pdoc3
+			perldoc
+			phpDocumentor
+			pydoc
+			rdoc
+			robodoc
+			sandcastle
+			sphinx
+			visual expert
+			vsdocman
+			yard
+			roxygen2
+			robohelp
+			adobe air
+			eclipsehelp
+			epub
+			flashhelp
+			flashhelp pro
+			javahelp
+			kf8
+			microsoft compiled html help
+			winhelp
+			mobi
+			oracle help for java
+			webhelp
+			webhelp pro
+		
+exec = 10
+	regex
+		pcre
+		py
+		js
+		
+misc = 11
+	stream
+		i2c
+		spi
+		
+	proto - protocols
+		http
+		gopher
+		ftp
+		sftp
+		ssh
+		telnet
+	technical
+	archive
+		list
+		array
+		encoding
+		tar
+		xz
+		gz
+		7zip
+		zip
+	fs
+		directory
+		inode
+		
+	app

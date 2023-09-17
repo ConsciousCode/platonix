@@ -1,0 +1,333 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<rfc
+  category="std"
+  docName="draft-rmcdaniels-contype-00"
+  ipr="trust200902"
+  consensus="no"
+  submissionType="IETF"
+  updates="1234, 5678"
+  xml:lang="en"
+>
+
+<front>
+	<!--seriesInfo name="Internet-Draft"/-->
+	
+	<title abbrev="Universal Content Typing">
+	A Proposal for Extending MIME Types
+	</title>
+	<author fullname="Robert McDaniels" initials="R." surname="McDaniels">
+		<address>
+			<email>conscious.code@gmail.com</email>
+		</address>
+	</author>
+	<date year="2020" month="May"/>
+	
+	<abstract>
+		<t><xref target="RFC2046"/> defines MIME (Multipurpose Internet Mail Extensions) to enable the inclusion of multimedia in mail. This was later extended to HTTP with <xref target="RFC6838"/>, and new protocols in development such as IPFS are creating their own binary encodings of similar concepts with "multicodecs". This memo proposes a dramatic expansion of the scope of MIME types for the purpose of universal identification of data types in current and future protocols.</t>
+	</abstract>
+</front>
+<middle>
+	<section title="Introduction">
+		<section title="Reason">
+			<t>Currently, MIME types offer a useful and relatively simple method of identifying multimedia typing in communications over the WWW. However their scope is limited and the relatively involved registration process discourages the development of new, innovative formats such as YAML which has yet to receive a MIME type despite being in wide use even on the web. MIME types are also confused by legacy decisions which cannot be corrected without breaking much of the web, such as a limited number of standards trees, confusion of encoding and content leading to the "great text/* vs application/* debate", and a dramatic overloading of application/* as a catch-all category (a casual check as of the time of writing shows 447 non-vendor application types and 955 vendor types, compare with the next largest tree audio/* with 155 vendor and non-vendor types <spanx style="emph">combined</spanx>). Additionally, MIME has growing use as file type metadata, for instance in <xref target="freedesktop:shared-mime-info">[shared-mime-info]</xref>. Evidently, MIME has grown far beyond the original expectation of web media metadata.</t>
+		</section>
+		
+		<section title="Terminology">
+			<t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref target="RFC2119"/>.</t>
+			
+			<t>Other key words used by this document are defined as followed: </t>
+		</section>
+	</section>
+	
+	<section title="Protocol">
+		<section title="Text">
+			<t>A textual representation is provided to aid in human recognition and backwards compatibility with the current MIME standard.</t>
+			
+			<figure title="Current MIME format">
+				<artwork>type "/" [tree "."] subtype ["+" suffix] *[";" parameter]</artwork>
+			</figure>
+			
+			<figure title="Proposed format" align="left">
+				<artwork>
+type := +(category "/")
+[encoding ":"] type subtype ["+" suffix] *[";" parameter]
+				</artwork>
+			</figure>
+			
+			<t>Type and subtype will be defined later <!--xref target="binaryfmt"/--> but are supersets of those provided by MIME. Suffix is part of subtype and has no special meaning beyond naming conventions matching with MIME. Parameters are included for compatibility with MIME and normalization encodes it in a different part of the type specifier (eg charset parameter becomes encoding).</t>
+			<t>"Encoding" here is taken to be one of: <list style="numbers">
+				<t>IANACharset identifiers or their aliases. <xref target="RFC3808"/></t>
+				<t>"text" to mean an unspecified text encoding (each format suggests a default)</t>
+				<t>"binary" to mean an unencoded octet stream</t>
+				<t>"other" to mean an encoding not yet added to IANACharset</t>
+				<t>A textual binary encoding (ASCII assumed):<list style="letters">
+					<t>"percent" <xref target="RFC3986"/></t>
+					<t>"base32", "base32hex", or "base64" <xref target="RFC4648"/></t>
+					<t>"hex"</t>
+					<t>"qp" (quoted-printable) <xref target="RFC2045"/></t>
+					<t>(more can be registered later)</t>
+				</list></t>
+			</list></t>
+		</section>
+		<section title="Binary">
+			<figure>
+				<artwork>
+[..encoding..|type.........subtype]
+|-----10-----|--------22----------|
+				</artwork>
+			</figure>
+			<t>The binary format is the canonical form - textual representations are inspired by it rather than the other way around. The form intended for long-term use is a 32-bit integer, the twelve MSBs with the most significant bits allocated for the type and the least significant bits allocated for the subtype. Between these allocations is padding made of unset bits. This allows the types and subtypes to be expanded independently - new standards can make use of the unused bits, which older implementations will recognize as unknown (sub)types.</t>
+			
+			<t>Encoding is an coded map to the MIBenum values: <list>
+				<t>0 <list>
+					<t>0: 7-8 bits (MIBenum 0-999) <list>
+						<t>0 = "binary"</t>
+						<t>1 = "other"</t>
+						<t>2 = "text" ("unknown" in MIBenum)</t>
+					</list></t>
+					<t>1 <list>
+						<t>0: 5-7 bits (MIBenum 1000-1999)</t>
+						<t>1: 7 bits Text to binary encoding</t>
+					</list></t>
+				</list></t>
+				<t>1: 9 bits (MIBenum 2000-2999)</t>
+			</list></t>
+			
+			<t>Type codes are allocated as a prefix tree of varying base-2 radixes. This allows general information to be determined from category prefixes, and for subtype spaces to be allocated more space based on expected usage.</t>
+			
+			<t>Contypes can optionally include an additional 32-bit integer with per-type allocation which encodes other variations of data formatting, such as the codec of an audio container file. An integer value of 0 is reserved to mean no further information is known. In general this value can be safely remvoed as it encodes metadata found in the file itself. This maps roughly to MIME parameters, though some standard parameters (such as charset) are encoded in other ways.</t>
+		</section>
+	</section>
+	<section title="Types">
+		<t>Categories prefixed with @ are taken to be semantic distinctions which are disallowed from being the only category in a type.</t>
+		<t>What follows is a first draft of the type bit allocation <list>
+			<t>0 primitive <list>
+				<t>0 number <list>
+					<t>0 int</t>
+					<t>0 real</t>
+				</list></t>
+				<t>1 <list>
+					<t>0 string</t>
+					<t>1 struct</t>
+				</list></t>
+			</list></t>
+			<t>1 composite <list>
+				<t>00 data <list>
+					<t>00 config <list>
+						<t>0 @xml</t>
+						<t>1 @json</t>
+					</list></t>
+					<t>01 crypto <list>
+						<t>0 digest <list>
+							<t>0 hash</t>
+							<t>1 crc</t>
+						</list></t>
+						<t>1 encryption</t>
+					</list></t>
+					<t>10 technical <list>
+						<t>0 science <list>
+							<t>0 chemical</t>
+						</list></t>
+					</list></t>
+					<t>11 app</t>
+				</list></t>
+				<t>01 media <list>
+					<t>00 multi <list>
+						<t>0 video</t>
+						<t>1 doc</t>
+					</list></t>
+					<t>01 audio <list>
+						<t>0 codec</t>
+						<t>1 container</t>
+					</list></t>
+					<t>10 graphic <list>
+						<t>0 raster</t>
+						<t>1 vector</t>
+					</list></t>
+					<t>11 other <list>
+						<t>0 style <list>
+							<t>0 font</t>
+							<t>1 sheetsheet</t>
+						</list></t>
+						<t>1 model</t>
+					</list></t>
+				</list></t>
+				<t>10 exec <list>
+					<t>0 compile <list>
+						<t>0 code</t>
+						<t>1 source</t>
+					</list></t>
+					<t>1 interpret <list>
+						<t>0 script</t>
+						<t>1 dsl</t>
+					</list></t>
+				</list></t>
+				<t>11 meta <list>
+					<t>00 proto</t>
+					<t>01 archive</t>
+					<t>10 file <list>
+						<t>0 node</t>
+						<t>1 fs</t>
+					</list></t>
+					<t>11 extra <list>
+						<t>0 special <list>
+							<t>0 unknown</t>
+						</list></t>
+						<t>1 multipart</t>
+					</list></t>
+				</list></t>
+			</list></t>
+		</list></t>
+		
+		<t>For compatibility with MIME, some additional categories are defined as alias categories with no simple encoding: <list>
+			<t>application - split across app and exec</t>
+			<t>text - resolves for any subtypes with a text encoding. Anything of the form binary:text/* is an error</t>
+			<t>message - mixture of proto and config</t>
+		</list></t>
+		
+		<t>For further compatibility, additional name rewriting rules are defined: <list>
+			<t>example/* = special/example</t>
+			<t>*/example = special/example</t>
+			<t>prs.* = special/personal</t>
+			<t>Remove x.* and x-* prefixes. If unresolved, special/nonstandard</t>
+			<t>Remove vnd.* prefix and search. If unresolved, special/vendor</t>
+			<t>For unresolved types, special/unknown</t>
+			<t>For unresolved subtypes, unknown/(type)</t>
+		</list></t>
+		
+		<t>The type allocated for unstructured data is unknown/blob, aliased as application/octet-stream.</t>
+	</section>
+	
+	<section title="IANA Considerations">
+		<t>None.</t>
+	</section>
+	
+	<section title="Security Considerations">
+		<t>There are no security considerations for an imaginary
+	Internet Draft.</t>
+	</section>
+	
+	<section title="Acknowledgements">
+		<t>Some of the things included in this draft came from
+	Elwyn Davies" templates.</t>
+	</section>
+</middle>
+<back>
+	<references title="Normative References">
+		<reference anchor="RFC2119">
+			<front>
+				<title> Key words for use in RFCs to Indicate Requirement Levels</title>
+				<author initials="S." surname="Bradner">
+					<organization>Harvard University</organization>
+				</author>
+				<date year="1997" month="March"/>
+			</front>
+			<seriesInfo name="RFC" value="2119"/>
+		</reference>
+		
+		<reference anchor="RFC3808">
+			<front>
+				<title>IANA Charset MIB</title>
+				<author initials="I." surname="McDonald">
+					<organization>High North</organization>
+				</author>
+				<date year="2004" month="June"/>
+			</front>
+			<seriesInfo name="RFC" value="3808"/>
+		</reference>
+		
+		<reference anchor="RFC3986">
+			<front>
+				<title>Uniform Resource Identifier (URI): Generic Syntax</title>
+				<author initials="T." surname="Berners-Lee">
+					<organization>W3C/MIT</organization>
+				</author>
+				<author initials="R." surname="Fielding">
+					<organization>Day Software</organization>
+				</author>
+				<author initials="L." surname="Masinter">
+					<organization>Adobe Systems</organization>
+				</author>
+				<date year="2005" month="January"/>
+			</front>
+			<seriesInfo name="RFC" value="3986"/>
+		</reference>
+		
+		<reference anchor="RFC4648">
+			<front>
+				<title>The Base16, Base32, and Base64 Data Encodings</title>
+				<author initials="S." surname="Josefsson">
+					<organization>SJD</organization>
+				</author>
+				<date year="2006" month="October"/>
+			</front>
+			<seriesInfo name="RFC" value="4648"/>
+		</reference>
+		
+		<reference anchor="RFC2045">
+			<front>
+				<title>Multipurpose Internet Mail Extensions (MIME) Part One: Format of Internet Message Bodies</title>
+				<author initials="N." surname="Freed">
+					<organization>Innosoft</organization>
+				</author>
+				<author initials="N." surname="Borenstein">
+					<organization>First Virtual</organization>
+				</author>
+				<date year="1996" month="November"/>
+			</front>
+			<seriesInfo name="RFC" value="2045"/>
+		</reference>
+	</references>
+	
+	<references title="Informative References">
+		<reference anchor="RFC2046">
+			<front>
+				<title>Multipurpose Internet Mail Extensions (MIME) Part Two: Media Types</title>
+				<author initials="N." surname="Freed" fullname="N. Freed">
+					<organization>Innosoft</organization>
+				</author>
+				<author initials="N." surname="Borenstein" fullname="N. Borenstein">
+					<organization>First Virtual</organization>
+				</author>
+				<date year="1996" month="November"/>
+			</front>
+			<seriesInfo name="RFC" value="2046"/>
+			<annotation>This is a primary reference work.</annotation>
+		</reference>
+		
+		<reference anchor="RFC6838">
+			<front>
+				<title>Media Type Specifications and Registration Procedures</title>
+				<author initials="N." surname="Freed" fullname="N. Freed">
+					<organization>Oracle</organization>
+				</author>
+				<author initials="J." surname="Klensin" fullname="J. Klensin">
+				</author>
+				<author initials="T." surname="Hansen" fullname="T. Hansen">
+					<organization>AT&amp;T Laboratories</organization>
+				</author>
+				<date year="2013" month="January"/>
+			</front>
+			<seriesInfo name="RFC" value="6838"/>
+			<annotation>This is a primary reference work.</annotation>
+		</reference>
+		
+		<reference anchor="freedesktop:shared-mime-info" target="https://specifications.freedesktop.org/shared-mime-info-spec/latest/">
+			<front>
+				<title>Shared MIME-info Database</title>
+				<author initials="T." surname="Leonard" fullname="T. Leonard">
+					<organization>X Desktop Group</organization>
+					<address>
+						<email>tal197@users.sf.net</email>
+					</address>
+				</author>
+				<date year="2008" month="June"/>
+			</front>
+			<seriesInfo name="FreeDesktop" value="shared-mime-info"/>
+			<annotation>This is a primary reference work</annotation>
+		</reference>
+	</references>
+</back>
+
+</rfc>

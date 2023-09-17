@@ -1,0 +1,27 @@
+bencode
+bson
+cbor
+csv
+
+xml+atom
+plist
+xml
+yaml
+json
+edn
+rebol
+rdf
+	rdf-n3
+		turtle (strict subset)
+	n-triples
+	n-quads
+	json-ld
+	xml+rdf
+	json+rdf
+
+hjson
+hocon
+json5
+recfile
+exi
+ini // standard defined by libconfini which seems to be the most accepting parser (ini has no formal spec)

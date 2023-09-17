@@ -1,0 +1,321 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!DOCTYPE rfc SYSTEM "rfc2629-xhtml.ent">
+<rfc category="std" docName="draft-rmcdaniels-contype-00" ipr="trust200902" consensus="no" submissionType="IETF" updates="1234, 5678" xml:lang="en" obsoletes="" version="3">
+  <!-- xml2rfc v2v3 conversion 2.44.0 -->
+  <front>
+    <!--seriesInfo name="Internet-Draft"/-->
+	
+	<title abbrev="Universal Content Typing">
+	A Proposal for Extending MIME Types
+    </title>
+    <seriesInfo name="Internet-Draft" value="draft-rmcdaniels-contype-00"/>
+    <author fullname="Robert McDaniels" initials="R." surname="McDaniels">
+      <address>
+        <email>conscious.code@gmail.com</email>
+      </address>
+    </author>
+    <date year="2020" month="May"/>
+    <abstract>
+      <t><xref target="RFC2046" format="default"/> defines MIME (Multipurpose Internet Mail Extensions) to enable the inclusion of multimedia in mail. This was later extended to HTTP with <xref target="RFC6838" format="default"/>, and new protocols in development such as IPFS are creating their own binary encodings of similar concepts with "multicodecs". This memo proposes a dramatic expansion of the scope of MIME types for the purpose of universal identification of data types in current and future protocols.</t>
+    </abstract>
+  </front>
+  <middle>
+    <section numbered="true" toc="default">
+      <name>Introduction</name>
+      <section numbered="true" toc="default">
+        <name>Reason</name>
+        <t>Currently, MIME types offer a useful and relatively simple method of identifying multimedia typing in communications over the WWW. However their scope is limited and the relatively involved registration process discourages the development of new, innovative formats such as YAML which has yet to receive a MIME type despite being in wide use even on the web. MIME types are also confused by legacy decisions which cannot be corrected without breaking much of the web, such as a limited number of standards trees, confusion of encoding and content leading to the "great text/* vs application/* debate", and a dramatic overloading of application/* as a catch-all category (a casual check as of the time of writing shows 447 non-vendor application types and 955 vendor types, compare with the next largest tree audio/* with 155 vendor and non-vendor types <em>combined</em>). Additionally, MIME has growing use as file type metadata, for instance in <xref target="freedesktop_shared-mime-info" format="default">[shared-mime-info]</xref>. Evidently, MIME has grown far beyond the original expectation of web media metadata.</t>
+      </section>
+      <section numbered="true" toc="default">
+        <name>Terminology</name>
+        <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref target="RFC2119" format="default"/>.</t>
+        <t>Other key words used by this document are defined as followed: </t>
+      </section>
+    </section>
+    <section numbered="true" toc="default">
+      <name>Protocol</name>
+      <section numbered="true" toc="default">
+        <name>Text</name>
+        <t>A textual representation is provided to aid in human recognition and backwards compatibility with the current MIME standard.</t>
+        <figure>
+          <name>Current MIME format</name>
+          <artwork name="" type="" align="left" alt=""><![CDATA[type "/" [tree "."] subtype ["+" suffix] *[";" parameter]]]></artwork>
+        </figure>
+        <figure>
+          <name>Proposed format</name>
+          <artwork name="" type="" align="left" alt=""><![CDATA[
+type := +(category "/")
+[encoding ":"] type subtype ["+" suffix] *[";" parameter]
+				]]></artwork>
+        </figure>
+        <t>Type and subtype will be defined later <!--xref target="binaryfmt"/--> but are supersets of those provided by MIME. Suffix is part of subtype and has no special meaning beyond naming conventions matching with MIME. Parameters are included for compatibility with MIME and normalization encodes it in a different part of the type specifier (eg charset parameter becomes encoding).</t>
+        <t>"Encoding" here is taken to be one of: </t>
+        <ol spacing="normal" type="1">
+          <li>IANACharset identifiers or their aliases. <xref target="RFC3808" format="default"/></li>
+          <li>"text" to mean an unspecified text encoding (each format suggests a default)</li>
+          <li>"binary" to mean an unencoded octet stream</li>
+          <li>"other" to mean an encoding not yet added to IANACharset</li>
+          <li>
+            <t>A textual binary encoding (ASCII assumed):</t>
+            <ol spacing="normal" type="a">
+              <li>"percent" <xref target="RFC3986" format="default"/></li>
+              <li>"base32", "base32hex", or "base64" <xref target="RFC4648" format="default"/></li>
+              <li>"hex"</li>
+              <li>"qp" (quoted-printable) <xref target="RFC2045" format="default"/></li>
+              <li>(more can be registered later)</li>
+            </ol>
+          </li>
+        </ol>
+      </section>
+      <section numbered="true" toc="default">
+        <name>Binary</name>
+        <artwork name="" type="" align="left" alt=""><![CDATA[
+[..encoding..|type.........subtype]
+|-----10-----|--------22----------|
+				]]></artwork>
+        <t>The binary format is the canonical form - textual representations are inspired by it rather than the other way around. The form intended for long-term use is a 32-bit integer, the twelve MSBs with the most significant bits allocated for the type and the least significant bits allocated for the subtype. Between these allocations is padding made of unset bits. This allows the types and subtypes to be expanded independently - new standards can make use of the unused bits, which older implementations will recognize as unknown (sub)types.</t>
+        <t>Encoding is an coded map to the MIBenum values: </t>
+        <ul empty="true" spacing="normal">
+          <li>
+            <t>0 </t>
+            <ul spacing="normal">
+              <li>
+                <t>0: 7-8 bits (MIBenum 0-999) </t>
+                <ul spacing="normal">
+                  <li>0 = "binary"</li>
+                  <li>1 = "other"</li>
+                  <li>2 = "text" ("unknown" in MIBenum)</li>
+                </ul>
+              </li>
+              <li>
+                <t>1 </t>
+                <ul spacing="normal">
+                  <li>0: 5-7 bits (MIBenum 1000-1999)</li>
+                  <li>1: 7 bits Text to binary encoding</li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+          <li>1: 9 bits (MIBenum 2000-2999)</li>
+        </ul>
+        <t>Type codes are allocated as a prefix tree of varying base-2 radixes. This allows general information to be determined from category prefixes, and for subtype spaces to be allocated more space based on expected usage.</t>
+        <t>Contypes can optionally include an additional 32-bit integer with per-type allocation which encodes other variations of data formatting, such as the codec of an audio container file. An integer value of 0 is reserved to mean no further information is known. In general this value can be safely remvoed as it encodes metadata found in the file itself. This maps roughly to MIME parameters, though some standard parameters (such as charset) are encoded in other ways.</t>
+      </section>
+    </section>
+    <section numbered="true" toc="default">
+      <name>Types</name>
+      <t>Categories prefixed with @ are taken to be semantic distinctions which are disallowed from being the only category in a type.</t>
+      <t>What follows is a first draft of the type bit allocation </t>
+      <ul empty="true" spacing="normal">
+        <li>
+          <t>0 primitive </t>
+          <ul spacing="normal">
+            <li>
+              <t>0 number </t>
+              <ul spacing="normal">
+                <li>0 int</li>
+                <li>0 real</li>
+              </ul>
+            </li>
+            <li>
+              <t>1 </t>
+              <ul spacing="normal">
+                <li>0 string</li>
+                <li>1 struct</li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li>
+          <t>1 composite </t>
+          <ul spacing="normal">
+            <li>
+              <t>00 data </t>
+              <ul spacing="normal">
+                <li>
+                  <t>00 config </t>
+                  <ul spacing="normal">
+                    <li>0 @xml</li>
+                    <li>1 @json</li>
+                  </ul>
+                </li>
+                <li>
+                  <t>01 crypto </t>
+                  <ul spacing="normal">
+                    <li>
+                      <t>0 digest </t>
+                      <ul spacing="normal">
+                        <li>0 hash</li>
+                        <li>1 crc</li>
+                      </ul>
+                    </li>
+                    <li>1 encryption</li>
+                  </ul>
+                </li>
+                <li>
+                  <t>10 technical </t>
+                  <ul spacing="normal">
+                    <li>
+                      <t>0 science </t>
+                      <ul spacing="normal">
+                        <li>0 chemical</li>
+                      </ul>
+                    </li>
+                  </ul>
+                </li>
+                <li>11 app</li>
+              </ul>
+            </li>
+            <li>
+              <t>01 media </t>
+              <ul spacing="normal">
+                <li>
+                  <t>00 multi </t>
+                  <ul spacing="normal">
+                    <li>0 video</li>
+                    <li>1 doc</li>
+                  </ul>
+                </li>
+                <li>
+                  <t>01 audio </t>
+                  <ul spacing="normal">
+                    <li>0 codec</li>
+                    <li>1 container</li>
+                  </ul>
+                </li>
+                <li>
+                  <t>10 graphic </t>
+                  <ul spacing="normal">
+                    <li>0 raster</li>
+                    <li>1 vector</li>
+                  </ul>
+                </li>
+                <li>
+                  <t>11 other </t>
+                  <ul spacing="normal">
+                    <li>
+                      <t>0 style </t>
+                      <ul spacing="normal">
+                        <li>0 font</li>
+                        <li>1 sheetsheet</li>
+                      </ul>
+                    </li>
+                    <li>1 model</li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+            <li>
+              <t>10 exec </t>
+              <ul spacing="normal">
+                <li>
+                  <t>0 compile </t>
+                  <ul spacing="normal">
+                    <li>0 code</li>
+                    <li>1 source</li>
+                  </ul>
+                </li>
+                <li>
+                  <t>1 interpret </t>
+                  <ul spacing="normal">
+                    <li>0 script</li>
+                    <li>1 dsl</li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+            <li>
+              <t>11 meta </t>
+              <ul spacing="normal">
+                <li>00 proto</li>
+                <li>01 archive</li>
+                <li>
+                  <t>10 file </t>
+                  <ul spacing="normal">
+                    <li>0 node</li>
+                    <li>1 fs</li>
+                  </ul>
+                </li>
+                <li>
+                  <t>11 extra </t>
+                  <ul spacing="normal">
+                    <li>
+                      <t>0 special </t>
+                      <ul spacing="normal">
+                        <li>0 unknown</li>
+                      </ul>
+                    </li>
+                    <li>1 multipart</li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+      </ul>
+      <t>For compatibility with MIME, some additional categories are defined as alias categories with no simple encoding: </t>
+      <ul empty="true" spacing="normal">
+        <li>application - split across app and exec</li>
+        <li>text - resolves for any subtypes with a text encoding. Anything of the form binary:text/* is an error</li>
+        <li>message - mixture of proto and config</li>
+      </ul>
+      <t>For further compatibility, additional name rewriting rules are defined: </t>
+      <ul empty="true" spacing="normal">
+        <li>example/* = special/example</li>
+        <li>*/example = special/example</li>
+        <li>prs.* = special/personal</li>
+        <li>Remove x.* and x-* prefixes. If unresolved, special/nonstandard</li>
+        <li>Remove vnd.* prefix and search. If unresolved, special/vendor</li>
+        <li>For unresolved types, special/unknown</li>
+        <li>For unresolved subtypes, unknown/(type)</li>
+      </ul>
+      <t>The type allocated for unstructured data is unknown/blob, aliased as application/octet-stream.</t>
+    </section>
+    <section numbered="true" toc="default">
+      <name>IANA Considerations</name>
+      <t>None.</t>
+    </section>
+    <section numbered="true" toc="default">
+      <name>Security Considerations</name>
+      <t>There are no security considerations for an imaginary
+	Internet Draft.</t>
+    </section>
+    <section numbered="true" toc="default">
+      <name>Acknowledgements</name>
+      <t>Some of the things included in this draft came from
+	Elwyn Davies" templates.</t>
+    </section>
+  </middle>
+  <back>
+    <references>
+      <name>References</name>
+      <references>
+        <name>Normative References</name>
+        <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="https://xml2rfc.tools.ietf.org/public/rfc/bibxml/reference.RFC.2119.xml"/>
+        <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="https://xml2rfc.tools.ietf.org/public/rfc/bibxml/reference.RFC.3808.xml"/>
+        <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="https://xml2rfc.tools.ietf.org/public/rfc/bibxml/reference.RFC.3986.xml"/>
+        <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="https://xml2rfc.tools.ietf.org/public/rfc/bibxml/reference.RFC.4648.xml"/>
+        <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="https://xml2rfc.tools.ietf.org/public/rfc/bibxml/reference.RFC.2045.xml"/>
+      </references>
+      <references>
+        <name>Informative References</name>
+        <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="https://xml2rfc.tools.ietf.org/public/rfc/bibxml/reference.RFC.2046.xml"/>
+        <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="https://xml2rfc.tools.ietf.org/public/rfc/bibxml/reference.RFC.6838.xml"/>
+        <reference anchor="freedesktop_shared-mime-info" target="https://specifications.freedesktop.org/shared-mime-info-spec/latest/">
+          <front>
+            <title>Shared MIME-info Database</title>
+            <seriesInfo name="FreeDesktop" value="shared-mime-info"/>
+            <author initials="T." surname="Leonard" fullname="T. Leonard">
+              <organization>X Desktop Group</organization>
+              <address>
+                <email>tal197@users.sf.net</email>
+              </address>
+            </author>
+            <date year="2008" month="June"/>
+          </front>
+          <annotation>This is a primary reference work</annotation>
+        </reference>
+      </references>
+    </references>
+  </back>
+</rfc>

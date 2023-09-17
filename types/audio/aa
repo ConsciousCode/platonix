@@ -1,0 +1,3 @@
+#tags: unbroken-drm proprietary audible
+
+error("The .aa file format is not known")

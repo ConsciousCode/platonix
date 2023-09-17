@@ -1,0 +1,181 @@
+read write open sync release rename remove
+
+size_t read(size_t length, const uint8_t* data);
+
+size_t write(size_t length, uint8_t* data);
+
+fid_t open(fid_t fd, const char* path, mode_t mode);
+
+void sync(fid_t fd);
+
+void release(fid_t fd);
+
+void rename(fid_t fd, fid_t nd, const char* name);
+
+void remove(fid_t fd);
+
+struct pnixfs* pnix
+struct inode* ino
+
+struct fnode* fno
+
+File:
+ * opened file (including paths)
+ * always well-defined: parent + path, even if hardlinks > 1
+ * filesystem is recursively defined, so every file is also an inode
+
+Transient subfile:
+ * Only available after opening its parent
+ * Opening the apparently same transient subfile on multiple open file descriptors always gives a different file which might not be synchronized
+ 
+
+struct fnode_ops {
+	ssize_t read(struct fnode* fno, size_t length, void* data);
+	ssize_t write(struct fnode* fno, size_t length, const void* data);
+	int open(struct fnode* fno, const char* path, mode_t mode, struct fnode* nf);
+	int sync(struct fnode* fno);
+	int release(struct fnode* fno);
+	int rename(struct fnode* fno, struct fnode* nd, const char* name);
+	int remove(struct fnode* fno);
+	
+	int permission(struct fnode* fno, const char* path, struct user* u);
+};
+
+struct fnode {
+	struct fnode_ops* ops;
+	struct dentry* dent;
+	void* data;
+};
+
+Project layers:
+ * Kernel module - exposes a few fs interfaces for mounting and passes low-level command messages from an interfacing device file to the appropriate fs
+ * Userspace daemon - handles subfile mounting by keeping a mapping of contype:handlers and translates these into low-level messages to pass to the kernel module
+ * Handler library - dynamically linked libraries exposing a FUSE-like interface which are loaded lazily based on the daemon's configuration (eg image/png:libpngfs.1.so). Might want to support multiple handlers per library as well to enable code reuse in related subfiles
+ 
+Configuration:
+ * [contypes...]: library
+   - library provides handlers for all of the given contypes - if any are needed, the whole library is loaded
+
+void register_contype_handler(content_t contype, struct subfile_operations* handler)
+
+Library exposes:
+ * list_contypes() -> contype[]
+   - verification about what this library supports, could be used to autogenerate configuration file from a directory of these libraries\
+   - alternatively, inline variable?
+ * get_contype_handler(contype) -> subfile_operations + private data (?)
+   - Daemon calls this and expects lazy initialization and caching to be handled by the library
+
+int create_fnode(struct fnode* fno, content_t ct)
+struct int_subfile {
+	
+};
+
+ssize_t tsf_offset_read(struct fnode* fno, size_t length, void* data) {
+	size_t offset = ((struct seekable*)fno->data)->offset;
+	
+	switch(length) {
+	case 0:
+		return -EOVERFLOW;
+	
+	case 1:
+		if(offset <= 0xff) {
+			*((uint8_t*)data) = offset;
+			break;
+		}
+		else {
+			return -EOVERFLOW;
+		}
+	
+	case 2:
+		if(offset <= 0xffff) {
+			*((uint16_t*)data) = offset;
+			break;
+		}
+		else {
+			return -EOVERFLOW;
+		}
+	
+	case 4:
+		if(offset <= 0xffffffff) {
+			*((uint32_t*)data) = offset;
+			break;
+		}
+		else {
+			return -EOVERFLOW;
+		}
+	
+	case 8:
+		*((uint64_t*)data) = offset;
+		break;
+	
+	default:
+		if(length >= 8) {
+			return tsf_offset_read(fno, 8, data);
+		}
+		else if(length >= 4) {
+			return tsf_offset_read(fno, 4, data);
+		}
+		else if(length >= 2) {
+			return tsf_offset_read(fno, 2, data);
+		}
+		else {
+			return tsf_offset_read(fno, 1, data);
+		}
+	}
+	
+	return length;
+}
+ssize_t tsf_offset_write(struct fnode* fno, size_t length, void* data) {
+	size_t* offset = &((struct seekable*)fno->data)->offset;
+	
+	switch(length) {
+	case 1:
+		if(offset <= 0xff) {
+			*((uint8_t*)data) = offset;
+			break;
+		}
+		else {
+			return -EOVERFLOW;
+		}
+	
+	case 2:
+		if(offset <= 0xffff) {
+			*((uint16_t*)data) = offset;
+			break;
+		}
+		else {
+			return -EOVERFLOW;
+		}
+	
+	case 4:
+		if(offset <= 0xffffffff) {
+			*((uint32_t*)data) = offset;
+			break;
+		}
+		else {
+			return -EOVERFLOW;
+		}
+	
+	case 8:
+		*((uint64_t*)data) = offset;
+		break;
+	}
+	
+	return length;
+}
+
+ssize_t tsf_stat_read(struct fnode* fno, size_t length, void* data) {
+	if(length >= sizeof(struct stat)) {
+		fill_stat(fno->dent->d_inode, (struct stat*)data);
+	}
+	else {
+		struct stat s;
+		
+		fill_stat(fno->dent->d_inode, &s);
+		memcpy(&s, data, length);
+	}
+	
+	return sizeof(struct stat);
+}
+
+struct fnode* open(struct fnode* base, const char* name, mode_t mode);

@@ -208,3 +208,23 @@ Process:
 * User id
 * Namespace
   - 
+## Core concepts
+* chunk_t = up to size of writable chunk
+* size_t = holds the size of a file
+
+interface File {
+	void close();
+
+	bytes read(chunk_t size);
+	chunk_t write(bytes data);
+	void seek(size_t off);
+	size_t tell();
+}
+
+interface Mount {
+	File open(string path);
+}
+
+interface Process {
+	map<fid_t, File> fidtab;
+}

@@ -1,0 +1,17 @@
+{
+	"env": {
+		"build": "4.15.0-91-generic"
+	},
+	"configurations": [{
+		"name": "Linux",
+		"includePath": [
+			"/lib/modules/${build}/build/include",
+			"${workspaceFolder}/**"
+		],
+		"defines": [],
+		"cStandard": "c11",
+		"cppStandard": "c++17",
+		"intelliSenseMode": "clang-x64"
+	}],
+	"version": 4
+}

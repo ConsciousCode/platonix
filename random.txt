@@ -1,0 +1,17 @@
+class FS {
+	root: inode;
+}
+
+class inode {
+	link(this, file, name): inode # link this file to a name
+	unlink(this, name): inode # unlink a subfile
+	open(this, name, flags): inode
+	read(this, size): data
+	write(this, data): size
+	exec(this, stdin): stdout
+}
+
+/a/b -> /a/c
+b = "/".open("a/b", LOCATE|CLOSE)
+"/".unlink("a/b")
+"/".link(b, "a/c")

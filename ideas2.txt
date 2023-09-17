@@ -1,0 +1,347 @@
+Regex types:
+ * int (signed, any length)
+
+bit = ultimate primitive, consumes 1 bit and decodes as 0 or 1
+seq = sequence of types
+
+Rule: consume at least one bit per loop iteration
+
+"RIFF"
+<u32 chunk_size = 36 + data_size
+"WAVE"
+
+"fmt " 16 1
+<u16 num_channels
+<u32 sample_rate
+<u32 byte_rate
+<u16 block_align
+<u16 bps
+
+assert(byte_rate == sample_rate*num_channels*bps/8)
+assert(...[N=8]) = assert on N-bit boundary
+...[N=8] = skip to next byte boundary
+
+"data"
+<u32 data_size
+list data = repeat(data_size/num_channels/(bps/8)) u8
+
+Operations:
+* block (if/else/do/while/until/repeat/for)
+* end
+* call (func index)
+* ret
+* literal (index)
+* const (index)
+* arith (op)
+* assert (msg index)
+* load (index)
+* store (index)
+* br (label offset)
+* br_table (length) (const-index label-index)*
+
+>u8 name
+<u16 value
+byte word dword qword
+short long
+"literal"
+0xFF43
+if(name == 0) {
+	ij
+}
+else {}
+do {} while(cond)
+while(cond) {}
+until(cond) {}
+list v = repeat(N) {
+	bla
+	bla
+}
+switch(x) {
+	case(v) {
+		
+	}
+}
+for(init; cond; update) {}
+var x = init();
+struct typename {
+	
+}
+
+break continue retry
++ - * / % // %% **
+> >= < <= == != and or
+<< >> | & ^
+
+[type] name => type[1]
+
+big(S, N, T) = loop(N) { (value<<S) | T() }
+lil(S, N, T) = loop(N)[offset=0] {
+	return value|(next<<offset);
+	offset += S
+}
+byte(endian) = endian(1, 8, bit)
+bigbyte = byte(big)
+lilbyte = byte(lil)
+
+bin_int(bit_end, byte_end, bytes) = byte_end(8, bytes, byte(byte_end))
+
+compact(bit_e, byte_e, bytes) loop(bytes) { value + byte }
+
+Types:
+ * integer
+   - Multiple ways to encode an integer, need a way to decouple encoding from interpretation
+   - encoding is a parameter, read as a system-canonical format
+   - #:i32 #:i64 #:str #:vint
+ * list
+ * map
+ * time
+ * user/group
+ * mode
+   - type r w x sticky
+ * owner
+   - uid gid
+
+Directory = list
+
+File type defines a program which can interpret raw binary data, exposing FS interfaces like subfiles and metafiles
+
+/
+	exec/ - equivalent of **bin/
+	app/ - user-presenting applications
+	pkg/ - all packages
+	sys/
+	run/ - combines /proc and /run
+		{pid or name}/
+			pid
+			name
+			
+			&cwd
+			&exe
+			argv
+			env
+			mem
+			stack
+			heap
+			bss
+			data
+			text
+			lib/
+				&{library}
+			ns/ - curated (masked) root
+			umask
+			&parent
+			&user - uid, link to /user/name
+			&group - gid, link to /user/name
+			&master - other process, used to register in a pgroup/session
+			&cpu
+			fd/
+				{file descriptor}
+			signal
+			input - stdin
+			output - stdout
+			error - stderr
+		&self
+	user/
+		{name}/
+			shadow - something something for authentication
+			members/
+			groups/
+			?shell
+			?home/
+	boot/
+	dev/
+	lib/
+	var/
+		log/
+	net/
+		udp/
+			{ip/dns}
+		tcp
+		ipfs/
+		mqtt/
+	tmp/
+	etc/
+
+/user/consciouscode/home/Desktop
+
+Common metafiles:
+	#xattr
+	#io - ioctl
+	#ctl
+	#stat - read = struct stat
+		dev
+		ino
+		mode
+		nlink
+		uid = link to user file
+		gid = link to group file
+		rdev = link to device descriptor
+		size
+		blksize
+		blocks
+		atime : date
+			#:(date format)
+		mtime
+			...
+		ctime
+			...
+
+FD-only metafiles:
+	##offset
+	##refs? number of open file descriptors
+	##mode
+
+File types:
+	Regular - non-volatile contents, offset is byte offset
+	Block - volatile contents, offset is byte offset
+	Char - offset is meaningless or RO
+	Fifo - writes to can be read from, unidirectional, offset is size
+	Socket - each fd is independent, offset meaningless
+	Index - list of different-length entries, offset is index into the list
+	Map - noncontiguous, offset is key hash
+
+class DirectoryFD:
+	def __init__(self, d, flags):
+		self.d = d
+		self.flags = flags
+		self.offset = 0
+	
+	def fsync(self):
+		pass
+	
+	def flush(self):
+		pass
+	
+	def release(self):
+		pass
+	
+	def read(self, off, size):
+		pass
+	
+	def write(self, off, size):
+		if size == 0:
+			self.delent()
+		pass
+
+class Directory:
+	def __init__(self, files):
+		self.files = files
+	
+	def lookup(self, name):
+		return self.files[name]
+	
+	def create(self, name, mode, umask, rdev):
+		pass
+	
+	def unlink(self, name):
+		del self.files[name]
+	
+	def open(self, flags):
+		flags =
+			READ
+			WRITE
+				!READ & !WRITE = PATH
+			APPEND / TRUNC = 0 / 1
+			CREATE
+			EXCL
+			ASYNC
+		return DirectoryFD(self, flags)
+	
+	
+
+File:
+	lookup
+	forget?
+	mknod = mknod/mkdir/symlink
+	unlink = unlink/rmdir
+	
+	read = read/readdir/readdirplus/ioctl
+	write = write/ioctl
+	copy_file_range
+	
+	read_buf
+	write_buf
+	
+	open = open/openat/opendir/create/(get/set/rm/list)xattr/access
+	flush
+	release = release/releasedir
+	
+	fsync
+	fallocate
+	poll
+
+FS:
+	init
+	destroy
+	
+	rename
+	
+	statfs
+	
+	flock
+	getlk
+	setlk
+	bmap
+	
+	retrieve_reply
+	forget_multi
+	
+	lseek
+
+pnix_file:
+	lookup(fid_t parent, string name)
+	forget(fid_t fd, int count)
+	fuse: mknod / ???
+	fuse: mkdir / open(fd, "name", CREATE); close(fd);
+	fuse: unlink - primitive?
+	fuse: rmdir / unlink
+	fuse: symlink / open(fd, "name", CREATE|LINK); close(fd)
+	
+	read() =
+	write()
+	
+	open()
+	flush()
+	release()
+	
+	fuse: fsync - primitive?
+	fuse: opendir / open(fd, "name"); -> directory inode read/write
+	fuse: releasedir / release
+	fuse: fsyncdir / fsync
+	
+	fuse: setxattr / open(fd, "#xattr/name", WRITE); write(_, data)
+	fuse: getxattr / open(fd, "#xattr/name", READ); read()
+	fuse: listxattr / open(fd, "#xattr", READ); read()
+	fuse: removexattr / unlink(fd, "#xattr/name")
+	fuse: access / open(fd, "#access", READ); read()
+	fuse: readdirplus / lsdir().forEach(open) ?
+	fuse: fallocate - primitive?
+	
+	fuse: ioctl / open(fd, "#io/CMD", WRITE); write(_, data)
+	fuse: poll / ??
+	fuse: write_buf -> write optimization for zero-copy transfer
+	fuse: read_buf -> read optimization
+
+pnix_fs:
+	init(void* user_data, hints*)
+	destroy(void* user_data)
+	
+	fuse: getattr / open(fd, "#stat", READ); read(fd, sizeof(stat));
+	fuse: setattr / open(fd, "#stat", WRITE); write(fd, data)
+	fuse: readlink / open(fd, name, LINK)
+	fuse: rename - primitve?
+	fuse: link - primitive?
+	
+	statfs()
+	
+	fuse: create / open(fd, name, CREAT|EXCL)
+	fuse: getlk - primitive?
+	fuse: setlk - primitive?
+	fuse: bmap / ??????
+	fuse: retrieve_reply -> low-level
+	fuse: forget_multi -> optimization forgetting >1 inode
+	fuse: flock / ???
+	fuse: copy_file_range -> optimization for read-write between inodes
+	fuse: lseek
+
+unlink = seek()
